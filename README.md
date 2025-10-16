@@ -1,6 +1,21 @@
 # Odoo MCP Server
 
-An MCP (Model Context Protocol) server for managing Odoo development environments.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.0-green)](https://modelcontextprotocol.io/)
+
+An MCP (Model Context Protocol) server for managing Odoo development environments with AI assistants.
+
+## 🎯 Overview
+
+This MCP server provides 19 tools to manage Odoo development environments, allowing AI assistants to:
+- Control Odoo server (start, stop, restart, status)
+- Manage modules (update, install, test)
+- Switch between databases
+- Navigate project directories
+- View logs and configurations
+
+Perfect for developers who want their AI assistants to remember and manage Odoo operations consistently across conversations.
 
 ## Features
 
