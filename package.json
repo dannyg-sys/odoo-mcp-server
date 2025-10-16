@@ -1,0 +1,28 @@
+{
+  "name": "odoo-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for managing Odoo development environments",
+  "type": "module",
+  "bin": {
+    "odoo-mcp-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x build/index.js",
+    "watch": "tsc --watch",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "odoo",
+    "development"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
