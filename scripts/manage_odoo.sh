@@ -11,18 +11,18 @@ if [ ! -f "$ODOO_BASE/odoo.conf" ] && ! ls "$ODOO_BASE"/odoo-*.conf >/dev/null 2
 fi
 cd "$ODOO_BASE" || { echo "Error: Odoo base directory not found: $ODOO_BASE" >&2; exit 1; }
 
-# Read odoo source dir from active conf (marker: "; odoo_src = ..."), default "odoo"
+# Read odoo source dir from active conf (marker: "; odoo_src = ..."), default "_odoo18"
 get_odoo_src() {
     local src
     src=$(grep -E "^;[[:space:]]*odoo_src[[:space:]]*=" odoo.conf 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' ')
-    echo "${src:-odoo}"
+    echo "${src:-_odoo18}"
 }
 
-# Read python venv dir from active conf (marker: "; python_venv = ..."), default "venv"
+# Read python venv dir from active conf (marker: "; python_venv = ..."), default "_venv18"
 get_python_venv() {
     local v
     v=$(grep -E "^;[[:space:]]*python_venv[[:space:]]*=" odoo.conf 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' ')
-    echo "${v:-venv}"
+    echo "${v:-_venv18}"
 }
 
 # Function to kill existing Odoo process (matches any odoo source dir)

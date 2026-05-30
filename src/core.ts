@@ -412,9 +412,9 @@ export function getProjectDir(config: OdooConfig, project: string): OdooResult {
 
 export function getOdooAddonDir(config: OdooConfig): OdooResult {
   // Prefer the addons entry that ends in "/addons" (the Odoo core source's
-  // addons dir, e.g. odoo/addons or odoo19/addons). Falls back to odoo/.
+  // addons dir, e.g. _odoo18/addons or _odoo19/addons). Falls back to _odoo18/.
   const paths = getAddonsPaths(config);
-  const addonPath = paths.find((p) => p.endsWith("/addons")) || join(config.root, "odoo", "addons");
+  const addonPath = paths.find((p) => p.endsWith("/addons")) || join(config.root, "_odoo18", "addons");
   const odooSrcDir = addonPath.replace(/\/addons$/, "");
 
   if (!existsSync(addonPath)) {
@@ -427,14 +427,15 @@ export function getOdooAddonDir(config: OdooConfig): OdooResult {
 }
 
 export function getEnterpriseDir(config: OdooConfig): OdooResult {
-  // Prefer an addons_path entry whose basename starts with "enterprise"
-  // (matches both ./enterprise and ./enterprise19). Falls back to enterprise/.
+  // Prefer an addons_path entry whose basename looks like an enterprise dir
+  // (matches _enterprise18/_enterprise19, and legacy enterprise/enterprise19).
+  // Falls back to _enterprise18/.
   const paths = getAddonsPaths(config);
   const enterprisePath =
     paths.find((p) => {
       const basename = p.split("/").pop() || "";
-      return basename.startsWith("enterprise");
-    }) || join(config.root, "enterprise");
+      return basename.startsWith("_enterprise") || basename.startsWith("enterprise");
+    }) || join(config.root, "_enterprise18");
 
   if (!existsSync(enterprisePath)) {
     return { text: `Enterprise directory not found: ${enterprisePath}`, isError: true };

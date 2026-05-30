@@ -9,18 +9,21 @@ management runs against this base.
 
 ## Layout
 
+System dirs are prefixed with `_` so they stand out from the project addon
+symlinks (which have no prefix):
+
 ```
 ~/odoo/
-  odoo/            Odoo Community 18 source        (odoo-bin)
-  enterprise/      Odoo Enterprise 18 addons
-  odoo19/          Odoo Community 19 source
-  enterprise19/    Odoo Enterprise 19 addons
-  venv/            Python venv for 18
-  venv19/          Python venv for 19
+  _odoo18/         Odoo Community 18 source        (odoo-bin)
+  _enterprise18/   Odoo Enterprise 18 addons
+  _odoo19/         Odoo Community 19 source
+  _enterprise19/   Odoo Enterprise 19 addons
+  _venv18/         Python venv for 18
+  _venv19/         Python venv for 19
+  _data/           filestore + sessions
   odoo.conf        ACTIVE config (a copy of the selected odoo-<project>.conf)
   odoo-<project>.conf   one per project (hhfbs, nellika, verita, tora, …)
   <project>        symlink -> ~/git/<repo>   (a project's custom addons)
-  data/            filestore + sessions
   odoo.log         server log     odoo.pid  running server PID
 ```
 
@@ -28,9 +31,9 @@ management runs against this base.
 The active `odoo.conf` selects the Odoo version via its markers and addons_path:
 
 ```
-; odoo_src = odoo19        # which source tree (default: odoo)
-; python_venv = venv19     # which venv (default: venv)
-addons_path = ./odoo19/addons,./enterprise19,./<project>
+; odoo_src = _odoo19        # which source tree (default: _odoo18)
+; python_venv = _venv19     # which venv (default: _venv18)
+addons_path = ./_odoo19/addons,./_enterprise19,./<project>
 ```
 
 `manage_odoo.sh` reads `odoo_src` / `python_venv`; the addons_path picks 18 vs 19
@@ -53,8 +56,8 @@ odoo frontend <modules>     # update frontend + restart — FILTERED output
 odoo test [modules]         # run tests; --tags <tags> to filter
 odoo logs                   # tail odoo.log; --lines <n> for the full log
 odoo shell                  # prints the interactive-shell command
-odoo addons-dir             # active core addons dir (odoo/ or odoo19/ -> tells the version)
-odoo enterprise-dir         # active enterprise dir (enterprise/ or enterprise19/)
+odoo addons-dir             # active core addons dir (_odoo18/ or _odoo19/ -> tells the version)
+odoo enterprise-dir         # active enterprise dir (_enterprise18/ or _enterprise19/)
 odoo config-path | project-config <p> | project-dir <p>
 ```
 

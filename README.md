@@ -56,8 +56,10 @@ passes `ODOO_BASE` so it operates on the resolved base.
 - **Base (fixed):** `~/odoo` — holds the active `odoo.conf` and one
   `odoo-<project>.conf` per project. (Legacy location `~/git/odoo18` is used as a
   fallback until the base is moved.)
-- **Sources live inside the base:** `odoo/` (CE 18), `enterprise/` (EE 18),
-  `odoo19/` (CE 19), `enterprise19/` (EE 19), plus `venv/` and `venv19/`.
+- **Sources live inside the base, `_`-prefixed so they stand out from the
+  unprefixed project addon symlinks:** `_odoo18/` (CE 18), `_enterprise18/`
+  (EE 18), `_odoo19/` (CE 19), `_enterprise19/` (EE 19), plus `_venv18/`,
+  `_venv19/`, and `_data/`.
 - **18 vs 19 is per-project, not a separate tree.** The active `odoo.conf`
   selects it via its `; odoo_src` / `; python_venv` markers and `addons_path`.
   Switching project (`odoo_switch_database` / `odoo switch`) is what changes

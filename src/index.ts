@@ -109,12 +109,13 @@ ENVIRONMENT LAYOUT (read this first)
 - Base directory (fixed): ~/odoo — holds the active odoo.conf and one
   odoo-<project>.conf per project. (The engine manage_odoo.sh is installed
   globally, not in the base.)
-- Odoo sources live INSIDE the base: odoo/ (CE 18), enterprise/ (EE 18),
-  odoo19/ (CE 19), enterprise19/ (EE 19), plus venv/ and venv19/.
+- Odoo sources live INSIDE the base, _-prefixed so they stand out from the
+  unprefixed project addon symlinks: _odoo18/ (CE 18), _enterprise18/ (EE 18),
+  _odoo19/ (CE 19), _enterprise19/ (EE 19), plus _venv18/, _venv19/, and _data/.
 - 18 vs 19 is per-PROJECT, not a separate tree. The active odoo.conf selects it
   via its "; odoo_src" / "; python_venv" markers and addons_path. Switching the
   project is what changes the running version — there is no version flag to set.
-  Use odoo_get_odoo_addon_dir to see which one is active (a path under odoo19/
+  Use odoo_get_odoo_addon_dir to see which one is active (a path under _odoo19/
   means CE 19).
 
 SERVER CONTROL:
@@ -141,8 +142,8 @@ DATABASE / PROJECTS:
 
 DIRECTORIES:
 - "Where is the [project] directory?" - Get project addon path
-- "Where is the Odoo core directory?" - Get active core addons path (odoo/ or odoo19/)
-- "Where is the enterprise directory?" - Get active enterprise path (enterprise/ or enterprise19/)
+- "Where is the Odoo core directory?" - Get active core addons path (_odoo18/ or _odoo19/)
+- "Where is the enterprise directory?" - Get active enterprise path (_enterprise18/ or _enterprise19/)
 
 Use any of these commands naturally and I'll use the Odoo management tools to help you!`,
               },
@@ -479,7 +480,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_odoo_addon_dir",
-        description: "Get the active Odoo core addons directory, read from the current odoo.conf addons_path. Resolves to odoo/ (CE 18) or odoo19/ (CE 19) depending on the active project — use this to tell which version is running.",
+        description: "Get the active Odoo core addons directory, read from the current odoo.conf addons_path. Resolves to _odoo18/ (CE 18) or _odoo19/ (CE 19) depending on the active project — use this to tell which version is running.",
         inputSchema: {
           type: "object",
           properties: {
@@ -493,7 +494,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_enterprise_dir",
-        description: "Get the active Odoo Enterprise addons directory, read from the current odoo.conf addons_path. Resolves to enterprise/ (EE 18) or enterprise19/ (EE 19) depending on the active project.",
+        description: "Get the active Odoo Enterprise addons directory, read from the current odoo.conf addons_path. Resolves to _enterprise18/ (EE 18) or _enterprise19/ (EE 19) depending on the active project.",
         inputSchema: {
           type: "object",
           properties: {

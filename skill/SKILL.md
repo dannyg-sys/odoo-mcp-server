@@ -22,8 +22,10 @@ connected.
 - **Base (fixed):** `~/odoo` — holds the active `odoo.conf` and one
   `odoo-<project>.conf` per project. (The engine `manage_odoo.sh` is installed
   globally, not in the base.)
-- **Sources live inside the base:** `odoo/` (CE 18), `enterprise/` (EE 18),
-  `odoo19/` (CE 19), `enterprise19/` (EE 19), plus `venv/` and `venv19/`.
+- **Sources live inside the base, `_`-prefixed (so they stand out from the
+  unprefixed project addon symlinks):** `_odoo18/` (CE 18), `_enterprise18/`
+  (EE 18), `_odoo19/` (CE 19), `_enterprise19/` (EE 19), plus `_venv18/`,
+  `_venv19/`, and `_data/`.
 - **18 vs 19 is per-project, not a separate tree.** The active `odoo.conf`
   selects it via the `; odoo_src = …` / `; python_venv = …` markers and its
   `addons_path`. Switching project (below) is what changes the running version.
@@ -63,8 +65,8 @@ If `__ODOO_CLI__` is missing (fresh checkout), build it first:
 | `config-path` | Active `odoo.conf` path |
 | `project-config <project>` | Path to a project's `odoo-<project>.conf` |
 | `project-dir <project>` | A project's custom addons directory |
-| `addons-dir` | Active Odoo core addons dir (resolves to odoo/ or odoo19/) |
-| `enterprise-dir` | Active Enterprise addons dir (enterprise/ or enterprise19/) |
+| `addons-dir` | Active Odoo core addons dir (resolves to _odoo18/ or _odoo19/) |
+| `enterprise-dir` | Active Enterprise addons dir (_enterprise18/ or _enterprise19/) |
 
 Options: `--error-only` (suppress warnings on update/install/frontend/test),
 `--tags <tags>`, `--lines <n>`, `--base <path>` (default `~/odoo`, fallback `~/git/odoo18`),
@@ -86,7 +88,7 @@ When you need the full picture (e.g. to debug something filtering hid), use
   Read the filtered result; if it shows errors, pull `logs` for context.
 - **"Switch to the nellika project"** → `switch nellika`, then `status`.
 - **"Run the tests for sale"** → `test sale` (add `--error-only` for just failures).
-- **"Which Odoo version is active?"** → `addons-dir` (odoo19/ ⇒ CE 19).
+- **"Which Odoo version is active?"** → `addons-dir` (_odoo19/ ⇒ CE 19).
 
 ## Examples
 
