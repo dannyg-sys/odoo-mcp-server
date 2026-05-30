@@ -122,9 +122,9 @@ This scaffolds everything for a project called `acme`:
 - starts Odoo (add `--no-start` to skip).
 
 The database is always named after the project. Omit `--version` for Odoo 18,
-`--enterprise` for community-only, and `--modules` to start with an empty
-database. The requested modules are also recorded in the config as
-`; install_modules = …`.
+`--enterprise` for community-only, and `--modules` to get a base-only database
+(a new database is always initialized with at least `base`). The requested
+modules are also recorded in the config as `; install_modules = …`.
 
 ## Loading a database
 
@@ -132,8 +132,8 @@ database. The requested modules are also recorded in the config as
 odoo import <file>                 # Odoo/odoo.sh .zip, .sql, .sql.gz, or pg_dump .dump
 odoo import <file> --db-only       # restore the database only, skip the filestore
 odoo import prod.zip --neutralize  # import a production backup, then neutralize it
-odoo fresh                         # wipe to an empty database (base installs on start)
-odoo fresh --init base,sale        # empty database, initialize base + sale
+odoo fresh                         # reset to a fresh database (initialized with base)
+odoo fresh --init base,sale        # fresh database initialized with base + sale
 ```
 
 These act on the **active** project's database and are **destructive** (they drop

@@ -190,7 +190,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_project",
-        description: "Manage projects and their databases. action: list (projects + active one) | switch (activate odoo-<project>.conf and restart; also changes the running Odoo 18/19) | new (scaffold a new project) | import (load a backup into the active DB) | fresh (reset the active DB to empty). DESTRUCTIVE: import/fresh drop the active DB; new creates/recreates the named DB.",
+        description: "Manage projects and their databases. action: list (projects + active one) | switch (activate odoo-<project>.conf and restart; also changes the running Odoo 18/19) | new (scaffold a new project) | import (load a backup into the active DB) | fresh (reset the active DB to a fresh one initialized with base, + 'modules'). DESTRUCTIVE: import/fresh drop the active DB; new creates/recreates the named DB.",
         inputSchema: {
           type: "object",
           properties: {

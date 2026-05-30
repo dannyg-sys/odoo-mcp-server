@@ -361,10 +361,11 @@ import_backup() {
     fi
 }
 
-# Create a FRESH (empty) database for the ACTIVE project: drop the existing
-# database and its filestore, then create an empty database. Starting Odoo
-# afterwards initializes it with the base modules. Flags: --init <modules> to
-# install/initialize specific modules right away, --no-start to skip the restart.
+# Create a FRESH database for the ACTIVE project: drop the existing database and
+# its filestore, create a new one, and initialize it. A new database must be
+# initialized with -i (Odoo does NOT auto-initialize on a normal start), so we
+# always install at least base. Flags: --init <modules> to install extra modules
+# on top of base, --no-start to skip the restart.
 create_fresh_db() {
     local init_modules="" no_start=0
 
@@ -404,17 +405,18 @@ create_fresh_db() {
 
     echo "Creating empty database $db_name..."
     createdb -U "$db_user" "$db_name" || { echo "Failed to create database"; return 1; }
-    echo "Fresh database created."
 
-    if [ -n "$init_modules" ]; then
-        echo "Initializing modules: $init_modules"
-        install_modules "$init_modules"
-    fi
+    # A freshly created database is NOT auto-initialized on a normal server start
+    # (Odoo would 500 with "ir_module_module does not exist"). Always initialize
+    # at least base; install the requested modules on top.
+    [ -z "$init_modules" ] && init_modules="base"
+    echo "Initializing database with modules: $init_modules"
+    install_modules "$init_modules"
 
     if [ "$no_start" = "1" ]; then
         echo "Done (Odoo not started; --no-start given)."
     else
-        echo "Starting Odoo (an empty database initializes base on startup)..."
+        echo "Starting Odoo..."
         start_odoo
     fi
 }
@@ -538,7 +540,7 @@ show_help() {
     echo "  switch PROJECT         Alias for switch_config"
     echo "  import FILE [--db-only] [--neutralize] [--no-start]  Import a backup into the active project, then restart"
     echo "  import_backup FILE   Alias for import"
-    echo "  fresh [--init MODULES] [--no-start]  Drop the DB+filestore and create an empty database, then restart"
+    echo "  fresh [--init MODULES] [--no-start]  Drop the DB+filestore and create a fresh DB (base + MODULES), then restart"
     echo "  create_fresh_db      Alias for fresh"
     echo "  new NAME [--version 18|19] [--enterprise] [--modules a,b,c] [--repo PATH] [--http-port N] [--no-start]"
     echo "                       Scaffold odoo-NAME.conf (db=NAME, addons symlink ./NAME), activate, create DB, install modules"
@@ -567,8 +569,8 @@ show_help() {
     echo "  $0 import backup.zip --db-only    # Restore database only (skip filestore)"
     echo "  $0 import prod.zip --neutralize   # Import then neutralize (safe dev copy)"
     echo "  $0 import dump.sql.gz             # Restore a gzipped SQL dump (db only)"
-    echo "  $0 fresh                          # Empty database (base auto-installs on start)"
-    echo "  $0 fresh --init base,sale         # Empty database, initialize base+sale"
+    echo "  $0 fresh                          # Reset to a fresh database (initialized with base)"
+    echo "  $0 fresh --init base,sale         # Fresh database initialized with base+sale"
     echo "  $0 new acme --version 19 --enterprise --modules sale,account,stock"
     echo "                                    # New 19+enterprise project 'acme' with those modules"
 }
