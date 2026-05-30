@@ -116,6 +116,7 @@ odoo list
 odoo switch verita
 odoo update nell_thai_qr --error-only
 odoo test purchase_dual_unit
+odoo import ~/Downloads/backup.zip --neutralize   # drops+restores the active DB
 odoo logs --lines 200
 ```
 
@@ -169,7 +170,7 @@ npm run setup
 ### Database Management
 - `odoo_switch_database` - Activate a project's config and restart (also changes the running 18/19 version)
 - `odoo_list_databases` - List available project configurations and the active one
-- `odoo_import_database` - Import database from backup (partial support)
+- `odoo_import_database` - Import a backup into the active DB (.zip/.sql/.sql.gz/.dump) and restart; `dbOnly`/`neutralize`/`noStart` options. **Destructive** (drops the active DB)
 
 ### Other
 - `odoo_shell` - Instructions for starting interactive shell

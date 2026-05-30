@@ -347,28 +347,31 @@ export function switchDatabase(config: OdooConfig, project: string): OdooResult 
   return { text: `Switched to project: ${project}\n${output}` };
 }
 
-export function importDatabase(config: OdooConfig, backupFile: string): OdooResult {
+export interface ImportOptions {
+  dbOnly?: boolean;
+  neutralize?: boolean;
+  noStart?: boolean;
+}
+
+// Import a backup into the ACTIVE project's database. Delegates to
+// manage_odoo.sh import, which auto-detects the format (.zip Odoo/odoo.sh,
+// .sql, .sql.gz/.gz, pg_dump .dump), drops/recreates the DB, restores it (and
+// the filestore for zips unless dbOnly), optionally neutralizes, and restarts
+// Odoo unless noStart. WARNING: destructive — it drops the active database.
+export function importDatabase(
+  config: OdooConfig,
+  backupFile: string,
+  opts: ImportOptions = {}
+): OdooResult {
   if (!existsSync(backupFile)) {
     throw new Error(`Backup file not found: ${backupFile}`);
   }
-  if (!backupFile.endsWith(".zip")) {
-    throw new Error("Backup file must be a .zip file");
-  }
-
-  try {
-    executeCommand(config, `unzip -o "${backupFile}" -d /tmp/odoo_import_temp`);
-
-    const dumpFile = "/tmp/odoo_import_temp/dump.sql";
-    if (!existsSync(dumpFile)) {
-      throw new Error("Invalid backup: dump.sql not found in backup archive");
-    }
-
-    return {
-      text: `Database import requires manual steps:\n\n1. Backup extracted to: /tmp/odoo_import_temp\n2. Create/restore PostgreSQL database:\n   dropdb database_name\n   createdb database_name\n   psql database_name < /tmp/odoo_import_temp/dump.sql\n\n3. Restore filestore:\n   cp -r /tmp/odoo_import_temp/filestore/* ~/.local/share/Odoo/filestore/database_name/\n\n4. Update odoo.conf with database name\n5. Restart Odoo\n\nNote: Full automation of this process requires PostgreSQL credentials and is not yet implemented.`,
-    };
-  } catch (error: any) {
-    throw new Error(`Failed to import database: ${error.message}`);
-  }
+  let args = `import "${backupFile}"`;
+  if (opts.dbOnly) args += " --db-only";
+  if (opts.neutralize) args += " --neutralize";
+  if (opts.noStart) args += " --no-start";
+  const output = executeCommand(config, manage(args));
+  return { text: output };
 }
 
 export function getProjectDir(config: OdooConfig, project: string): OdooResult {

@@ -384,7 +384,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_import_database",
-        description: "Import an Odoo database backup (.zip file)",
+        description: "Import a backup into the ACTIVE project's database, then restart Odoo. Auto-detects format: Odoo/odoo.sh .zip (dump.sql [+ filestore]), plain .sql, gzipped .sql.gz/.gz, or pg_dump custom .dump. WARNING: destructive — this DROPS and recreates the active database.",
         inputSchema: {
           type: "object",
           properties: {
@@ -395,7 +395,22 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
             },
             backupFile: {
               type: "string",
-              description: "Path to the backup .zip file"
+              description: "Path to the backup file (.zip, .sql, .sql.gz/.gz, or .dump)"
+            },
+            dbOnly: {
+              type: "boolean",
+              description: "Restore the database only, skip the filestore even if present in the zip",
+              default: false
+            },
+            neutralize: {
+              type: "boolean",
+              description: "Neutralize the database after restore (disable outgoing mail, crons, payment providers) — use for production/odoo.sh exact backups",
+              default: false
+            },
+            noStart: {
+              type: "boolean",
+              description: "Do not start Odoo after the import",
+              default: false
             }
           },
           required: ["backupFile"]
@@ -533,7 +548,11 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       case "odoo_list_databases":
         return odoo.listDatabases(config);
       case "odoo_import_database":
-        return odoo.importDatabase(config, args.backupFile);
+        return odoo.importDatabase(config, args.backupFile, {
+          dbOnly: args.dbOnly,
+          neutralize: args.neutralize,
+          noStart: args.noStart,
+        });
       case "odoo_get_logs":
         return odoo.getLogs(config, args.lines || 50);
       case "odoo_get_project_dir":

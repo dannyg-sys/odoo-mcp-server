@@ -15,6 +15,9 @@ interface ParsedArgs {
   tags?: string;
   lines?: number;
   base?: string;
+  dbOnly: boolean;
+  neutralize: boolean;
+  noStart: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -23,6 +26,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   let tags: string | undefined;
   let lines: number | undefined;
   let base: string | undefined;
+  let dbOnly = false;
+  let neutralize = false;
+  let noStart = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -34,6 +40,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       lines = parseInt(argv[++i], 10);
     } else if (arg === "--base") {
       base = argv[++i];
+    } else if (arg === "--db-only") {
+      dbOnly = true;
+    } else if (arg === "--neutralize") {
+      neutralize = true;
+    } else if (arg === "--no-start") {
+      noStart = true;
     } else if (arg.startsWith("--")) {
       throw new Error(`Unknown option: ${arg}`);
     } else {
@@ -42,7 +54,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const command = positionals.shift() || "help";
-  return { command, positionals, errorOnly, tags, lines, base };
+  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart };
 }
 
 const HELP = `Odoo management CLI
@@ -61,7 +73,7 @@ Commands:
   shell                      Print the command to open an interactive Odoo shell
   switch <project>           Switch to project config (odoo-<project>.conf) and restart
   list                       List available project configurations
-  import <backup.zip>        Prepare a database backup import
+  import <file>              Import a backup into the active DB (.zip/.sql/.sql.gz/.dump), then restart
   logs                       Show the tail of odoo.log
   project-dir <project>      Show a project's custom addons directory
   addons-dir                 Show the active Odoo core addons directory
@@ -74,10 +86,14 @@ Options:
   --tags <tags>              Test tags filter (test command)
   --lines <n>                Number of log lines (logs command, default 50)
   --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
+  --db-only                  (import) restore database only, skip filestore
+  --neutralize               (import) neutralize the DB after restore (disable mail/crons/payments)
+  --no-start                 (import) do not start Odoo after the import
 `;
 
 function run(): odoo.OdooResult {
-  const { command, positionals, errorOnly, tags, lines, base } = parseArgs(process.argv.slice(2));
+  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart } =
+    parseArgs(process.argv.slice(2));
 
   if (command === "help" || command === "--help" || command === "-h") {
     return { text: HELP };
@@ -113,8 +129,8 @@ function run(): odoo.OdooResult {
     case "list":
       return odoo.listDatabases(config);
     case "import":
-      if (!positionals[0]) throw new Error("import requires a backup .zip path");
-      return odoo.importDatabase(config, positionals[0]);
+      if (!positionals[0]) throw new Error("import requires a backup file path");
+      return odoo.importDatabase(config, positionals[0], { dbOnly, neutralize, noStart });
     case "logs":
       return odoo.getLogs(config, lines || 50);
     case "project-dir":
