@@ -17,6 +17,47 @@ This MCP server provides 19 tools to manage Odoo development environments, allow
 
 Perfect for developers who want their AI assistants to remember and manage Odoo operations consistently across conversations.
 
+## Architecture & the two surfaces
+
+The management logic lives once, in `src/core.ts`, and is reached through two
+thin entry points plus a Claude Code skill:
+
+```
+src/core.ts    All Odoo logic + smart output filtering (single source of truth)
+src/index.ts   MCP server  → for Claude Desktop        (build/index.js)
+src/cli.ts     odoo-cli    → for Claude Code / terminal (build/cli.js)
+```
+
+Skills and MCP reach your machine through different doors, so each Claude
+surface uses the entry point that fits it:
+
+| Surface | How it reaches local Odoo | What it uses |
+|---|---|---|
+| **Claude Desktop** | a local MCP process it launches | the **MCP server** (`build/index.js`) |
+| **Claude Code** | host shell access | the **`odoo-manage` skill** → `odoo-cli` |
+
+Why the split: a Claude Desktop skill runs sandboxed and cannot execute the
+local CLI, so Desktop needs the MCP (a real local process) to touch your Odoo
+install. Claude Code has host shell access, so a skill calling `odoo-cli` is the
+lighter option there — the 19 MCP tool schemas don't have to sit in context.
+Both paths run the same `core.ts`, including the identical output filtering.
+
+The Claude Code skill lives at `~/.claude/skills/odoo-manage/SKILL.md` (it calls
+`node ~/git/odoo-mcp-server/build/cli.js`). The orientation that Desktop needs is
+carried by the MCP itself — the `odoo-help` prompt and the tool descriptions —
+so no separate Desktop skill is required.
+
+### Environment layout this manages
+
+- **Base (fixed):** `~/git/odoo18` — holds `manage_odoo.sh`, the active
+  `odoo.conf`, and one `odoo-<project>.conf` per project.
+- **Sources live inside the base:** `odoo/` (CE 18), `enterprise/` (EE 18),
+  `odoo19/` (CE 19), `enterprise19/` (EE 19), plus `venv/` and `venv19/`.
+- **18 vs 19 is per-project, not a separate tree.** The active `odoo.conf`
+  selects it via its `; odoo_src` / `; python_venv` markers and `addons_path`.
+  Switching project (`odoo_switch_database` / `odoo-cli switch`) is what changes
+  the running version — there is no version flag to set.
+
 ## Features
 
 - **Server Control**: Start, stop, restart, and check status of Odoo server
@@ -54,6 +95,27 @@ Add to your Claude Desktop config file (`~/Library/Application Support/Claude/cl
 
 The Odoo management tools will now be available in Claude.
 
+## CLI (Claude Code / terminal)
+
+Build produces `build/cli.js` (exposed as the `odoo-cli` bin). The `odoo-manage`
+Claude Code skill calls it, and you can run it directly:
+
+```bash
+node ~/git/odoo-mcp-server/build/cli.js <command> [args] [options]
+
+# examples
+node ~/git/odoo-mcp-server/build/cli.js status
+node ~/git/odoo-mcp-server/build/cli.js list
+node ~/git/odoo-mcp-server/build/cli.js switch verita
+node ~/git/odoo-mcp-server/build/cli.js update nell_thai_qr --error-only
+node ~/git/odoo-mcp-server/build/cli.js test purchase_dual_unit
+node ~/git/odoo-mcp-server/build/cli.js logs --lines 200
+```
+
+Run `odoo-cli help` for the full command list. Result text goes to stdout;
+`[Executing]`/`[Success]` diagnostics go to stderr. Options: `--error-only`,
+`--tags <tags>`, `--lines <n>`, `--base <version>` (default `odoo18`).
+
 ## Available Tools
 
 ### Server Control
@@ -71,8 +133,8 @@ The Odoo management tools will now be available in Claude.
 - `odoo_run_tests` - Run tests with optional module and tag filters
 
 ### Database Management
-- `odoo_switch_database` - Switch to a different database configuration
-- `odoo_list_databases` - List available database configurations
+- `odoo_switch_database` - Activate a project's config and restart (also changes the running 18/19 version)
+- `odoo_list_databases` - List available project configurations and the active one
 - `odoo_import_database` - Import database from backup (partial support)
 
 ### Other
@@ -102,24 +164,25 @@ The Odoo management tools will now be available in Claude.
 
 ## Configuration
 
-### Adding New Odoo Versions
+### Choosing the Odoo version
 
-Edit `src/index.ts` and add to `DEFAULT_CONFIGS`:
+You normally don't. The Odoo version (18 vs 19) is selected per project by the
+active `odoo.conf` — switch project with `odoo_switch_database` (or
+`odoo-cli switch <project>`) and the version follows. See
+[Environment layout](#environment-layout-this-manages).
 
-```typescript
-const DEFAULT_CONFIGS: Record<string, OdooConfig> = {
-  odoo18: {
-    root: join(os.homedir(), "git", "odoo18"),
-    name: "Odoo 18"
-  },
-  odoo17: {
-    root: join(os.homedir(), "git", "odoo17"),
-    name: "Odoo 17"
-  }
-};
+### Using a different base directory
+
+Both entry points default to the `~/git/odoo18` base. To target a different base
+under `~/git`, pass a version name: the MCP tools accept a `version` argument and
+the CLI accepts `--base <version>`, each resolving to `~/git/<version>`. The base
+must contain a `manage_odoo.sh` script or resolution fails with a clear error.
+
+```bash
+node ~/git/odoo-mcp-server/build/cli.js status --base odoo18
 ```
 
-Then rebuild:
+After changing source, rebuild:
 
 ```bash
 npm run build
@@ -129,7 +192,7 @@ npm run build
 
 - Node.js 16+
 - Odoo development environment with `manage_odoo.sh` script
-- Claude Desktop
+- Claude Desktop (MCP) and/or Claude Code (skill + CLI)
 
 ## Development
 

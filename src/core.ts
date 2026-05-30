@@ -309,32 +309,12 @@ export function listDatabases(config: OdooConfig): OdooResult {
 }
 
 export function switchDatabase(config: OdooConfig, project: string): OdooResult {
-  const targetConf = join(config.root, `odoo-${project}.conf`);
-  const currentConf = join(config.root, "odoo.conf");
-
-  if (!existsSync(targetConf)) {
-    throw new Error(`Configuration file not found: odoo-${project}.conf`);
-  }
-
-  try {
-    if (existsSync(currentConf)) {
-      executeCommand(config, `cp odoo.conf odoo.conf.backup`);
-    }
-
-    executeCommand(config, `cp odoo-${project}.conf odoo.conf`);
-
-    const statusOutput = executeCommand(config, "./manage_odoo.sh status");
-    if (statusOutput.includes("running")) {
-      executeCommand(config, "./manage_odoo.sh restart");
-      return { text: `Switched to database: ${project}\nOdoo has been restarted.` };
-    } else {
-      return {
-        text: `Switched to database: ${project}\nOdoo is not running. Start it with odoo_start.`,
-      };
-    }
-  } catch (error: any) {
-    throw new Error(`Failed to switch database: ${error.message}`);
-  }
+  // Delegate to manage_odoo.sh switch_config, the single source of truth: it
+  // stops Odoo, backs up the current odoo.conf to odoo.conf.prev, activates
+  // odoo-<project>.conf, and starts Odoo with the new configuration. On an
+  // unknown project it prints the list of available configs (captured here).
+  const output = executeCommand(config, `./manage_odoo.sh switch_config ${project}`);
+  return { text: `Switched to project: ${project}\n${output}` };
 }
 
 export function importDatabase(config: OdooConfig, backupFile: string): OdooResult {
