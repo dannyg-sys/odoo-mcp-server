@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc && chmod +x build/index.js build/cli.js",
     "watch": "tsc --watch",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "install-skill": "bash install-skill.sh"
   },
   "keywords": [
     "mcp",

@@ -116,6 +116,31 @@ Run `odoo-cli help` for the full command list. Result text goes to stdout;
 `[Executing]`/`[Success]` diagnostics go to stderr. Options: `--error-only`,
 `--tags <tags>`, `--lines <n>`, `--base <version>` (default `odoo18`).
 
+## Install the Claude Code skill
+
+The `odoo-manage` skill (source in `skill/SKILL.md`) lets Claude Code drive the
+CLI. Install it into `~/.claude/skills` with:
+
+```bash
+cd ~/git/odoo-mcp-server
+npm run install-skill        # or: ./install-skill.sh
+```
+
+The installer builds `build/cli.js` if needed and renders the skill with the
+absolute path of *this* checkout, so it works no matter where the repo is
+cloned. Re-run with `--force` to overwrite an existing install
+(`./install-skill.sh --force`). Set `CLAUDE_SKILLS_DIR` to install somewhere
+other than `~/.claude/skills`. Start a new Claude Code session to pick it up.
+
+To set this up on another computer:
+
+```bash
+git clone https://github.com/dannyg-sys/odoo-mcp-server.git ~/git/odoo-mcp-server
+cd ~/git/odoo-mcp-server
+npm install && npm run build
+npm run install-skill
+```
+
 ## Available Tools
 
 ### Server Control
