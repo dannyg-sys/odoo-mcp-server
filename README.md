@@ -171,37 +171,21 @@ Idempotent — re-running skips what already exists.
 
 ## Available Tools
 
-### Server Control
-- `odoo_start` - Start Odoo server
-- `odoo_stop` - Stop Odoo server  
-- `odoo_restart` - Restart Odoo server
-- `odoo_status` - Check server status
+The MCP exposes **four** tools, each taking an `action` (kept small so Claude
+Desktop reliably loads them all):
 
-### Module Management
-- `odoo_update_modules` - Update one or more modules
-- `odoo_install_modules` - Install new modules
-- `odoo_update_frontend` - Update frontend modules (auto-restarts)
+- **`odoo_server`** — `action`: `start` | `stop` | `restart` | `status` | `shell`
+- **`odoo_modules`** — `action`: `update` | `install` | `frontend` | `test`
+  (`modules`, `testTags`, `errorOnly`); output is filtered to errors/warnings
+- **`odoo_project`** — `action`: `list` | `switch` | `new` | `import` | `fresh`
+  (`project`, `name`, `odooVersion`, `enterprise`, `modules`, `repo`, `httpPort`,
+  `backupFile`, `dbOnly`, `neutralize`, `noStart`). **Destructive**: `import`/`fresh`
+  drop the active DB; `new` creates the named DB.
+- **`odoo_info`** — `action`: `logs` | `config-path` | `project-config` |
+  `project-dir` | `addons-dir` | `enterprise-dir` (`project`, `lines`)
 
-### Testing
-- `odoo_run_tests` - Run tests with optional module and tag filters
-
-### Database Management
-- `odoo_switch_database` - Activate a project's config and restart (also changes the running 18/19 version)
-- `odoo_new_project` - Scaffold a new project: write `odoo-<name>.conf`, symlink `./<name>`, create the DB, install modules, switch (`odooVersion`/`enterprise`/`modules`/`repo`/`noStart`)
-- `odoo_list_databases` - List available project configurations and the active one
-- `odoo_import_database` - Import a backup into the active DB (.zip/.sql/.sql.gz/.dump) and restart; `dbOnly`/`neutralize`/`noStart` options. **Destructive** (drops the active DB)
-- `odoo_create_fresh_db` - Drop the active DB+filestore and create an empty database, then restart; `initModules`/`noStart` options. **Destructive**
-
-### Other
-- `odoo_shell` - Instructions for starting interactive shell
-- `odoo_get_logs` - Retrieve last N lines from logs
-
-### Directory & Config Helpers
-- `odoo_get_project_dir` - Get path to project's custom addon directory
-- `odoo_get_odoo_addon_dir` - Get path to Odoo core addons
-- `odoo_get_enterprise_dir` - Get path to Enterprise addons
-- `odoo_get_config_path` - Get path to active odoo.conf
-- `odoo_get_project_config_path` - Get path to project-specific config
+The `odoo-help` prompt documents the same. (The CLI / `odoo` command keeps the
+full set of named subcommands — see "Terminal commands" above.)
 
 ## Usage Examples
 

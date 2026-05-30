@@ -115,8 +115,14 @@ ENVIRONMENT LAYOUT (read this first)
 - 18 vs 19 is per-PROJECT, not a separate tree. The active odoo.conf selects it
   via its "; odoo_src" / "; python_venv" markers and addons_path. Switching the
   project is what changes the running version — there is no version flag to set.
-  Use odoo_get_odoo_addon_dir to see which one is active (a path under _odoo19/
-  means CE 19).
+  Use odoo_info (action=addons-dir) to see which one is active (a path under
+  _odoo19/ means CE 19).
+
+TOOLS: everything is grouped into four tools, each taking an "action":
+  odoo_server  (start|stop|restart|status|shell)
+  odoo_modules (update|install|frontend|test; 'modules', 'errorOnly')
+  odoo_project (list|switch|new|import|fresh; 'project'/'name'/'backupFile'/…)
+  odoo_info    (logs|config-path|project-config|project-dir|addons-dir|enterprise-dir)
 
 SERVER CONTROL:
 - "Start Odoo" - Start the Odoo server
@@ -130,7 +136,7 @@ MODULE MANAGEMENT:
 - "Update frontend [module_name]" - Update frontend and restart
 Note: update/install/frontend output is filtered to errors and warnings
 (a clean run reports "✓ completed"). To see the full unfiltered log use
-odoo_get_logs.
+odoo_info (action=logs).
 
 TESTING:
 - "Run tests [for module]" - Run module tests (optionally by test tags)
@@ -158,431 +164,63 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
   private getTools(): Tool[] {
     return [
       {
-        name: "odoo_start",
-        description: "Start the Odoo server. Use this when the user asks to start Odoo, launch Odoo, or run Odoo.",
+        name: "odoo_server",
+        description: "Control the Odoo server for the active project. action: start | stop | restart | status | shell (shell prints the command to open an interactive shell).",
         inputSchema: {
           type: "object",
           properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_stop",
-        description: "Stop the running Odoo server. Use this when the user asks to stop Odoo, shutdown Odoo, or kill Odoo.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_restart",
-        description: "Restart the Odoo server. Use this when the user asks to restart Odoo, reboot Odoo, or reload Odoo.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_status",
-        description: "Check if Odoo server is running",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_update_modules",
-        description: "Update one or more Odoo modules and restart. Output is filtered to errors and warnings (a clean run reports success); set errorOnly to suppress warnings too, or use odoo_get_logs for the full unfiltered log.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            modules: {
-              type: "string",
-              description: "Comma-separated list of modules to update (e.g., 'sale,purchase')"
-            },
-            errorOnly: {
-              type: "boolean",
-              description: "Show only error output",
-              default: false
-            }
+            action: { type: "string", enum: ["start", "stop", "restart", "status", "shell"], description: "What to do" }
           },
-          required: ["modules"]
+          required: ["action"]
         }
       },
       {
-        name: "odoo_update_module",
-        description: "Update a single Odoo module and restart (alias for odoo_update_modules). Output is filtered to errors and warnings; use odoo_get_logs for the full log.",
+        name: "odoo_modules",
+        description: "Update/install/test Odoo modules in the active project. action: update | install | frontend | test. 'modules' is a comma-separated list (required for update/install/frontend; optional for test = all). Output is filtered to errors/warnings; use odoo_info action=logs for the full log.",
         inputSchema: {
           type: "object",
           properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            module: {
-              type: "string",
-              description: "Module name to update (e.g., 'sale' or 'purchase')"
-            },
-            errorOnly: {
-              type: "boolean",
-              description: "Show only error output",
-              default: false
-            }
+            action: { type: "string", enum: ["update", "install", "frontend", "test"], description: "What to do" },
+            modules: { type: "string", description: "Comma-separated modules (e.g. 'sale,account'); optional for test" },
+            testTags: { type: "string", description: "Test tags filter (test only), e.g. 'at_install'" },
+            errorOnly: { type: "boolean", description: "Suppress warnings, show only errors", default: false }
           },
-          required: ["module"]
+          required: ["action"]
         }
       },
       {
-        name: "odoo_install_modules",
-        description: "Install one or more Odoo modules. Output is filtered to errors and warnings; set errorOnly to suppress warnings, or use odoo_get_logs for the full log.",
+        name: "odoo_project",
+        description: "Manage projects and their databases. action: list (projects + active one) | switch (activate odoo-<project>.conf and restart; also changes the running Odoo 18/19) | new (scaffold a new project) | import (load a backup into the active DB) | fresh (reset the active DB to empty). DESTRUCTIVE: import/fresh drop the active DB; new creates/recreates the named DB.",
         inputSchema: {
           type: "object",
           properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            modules: {
-              type: "string",
-              description: "Comma-separated list of modules to install (e.g., 'stock_account,hr')"
-            },
-            errorOnly: {
-              type: "boolean",
-              description: "Show only error output",
-              default: false
-            }
+            action: { type: "string", enum: ["list", "switch", "new", "import", "fresh"], description: "What to do" },
+            project: { type: "string", description: "Project name (switch)" },
+            name: { type: "string", description: "New project name (new) — used for odoo-<name>.conf, the database, and the ./<name> addons symlink" },
+            odooVersion: { type: "string", enum: ["18", "19"], description: "Odoo version for a new project (new)", default: "18" },
+            enterprise: { type: "boolean", description: "Include enterprise addons (new)", default: false },
+            modules: { type: "string", description: "Comma-separated modules to install (new) or initialize (fresh), e.g. 'sale,account,stock'" },
+            repo: { type: "string", description: "Path to symlink ./<name> at (new; default ~/git/<name>)" },
+            httpPort: { type: "number", description: "http_port for a new project (new; default 8069)" },
+            backupFile: { type: "string", description: "Backup file path (import): .zip / .sql / .sql.gz / .dump" },
+            dbOnly: { type: "boolean", description: "Restore DB only, skip filestore (import)", default: false },
+            neutralize: { type: "boolean", description: "Neutralize the DB after import (disable mail/crons/payments)", default: false },
+            noStart: { type: "boolean", description: "Do not start Odoo afterwards (new/import/fresh)", default: false }
           },
-          required: ["modules"]
+          required: ["action"]
         }
       },
       {
-        name: "odoo_update_frontend",
-        description: "Update frontend modules and automatically restart Odoo. Output is filtered to errors and warnings; use odoo_get_logs for the full log.",
+        name: "odoo_info",
+        description: "Inspect the active project. action: logs (tail the full odoo.log) | config-path | project-config | project-dir | addons-dir (active core source: _odoo18 or _odoo19) | enterprise-dir.",
         inputSchema: {
           type: "object",
           properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            modules: {
-              type: "string",
-              description: "Comma-separated list of frontend modules to update"
-            },
-            errorOnly: {
-              type: "boolean",
-              description: "Show only error output",
-              default: false
-            }
+            action: { type: "string", enum: ["logs", "config-path", "project-config", "project-dir", "addons-dir", "enterprise-dir"], description: "What to inspect" },
+            project: { type: "string", description: "Project name (project-config / project-dir)" },
+            lines: { type: "number", description: "Number of log lines (logs)", default: 50 }
           },
-          required: ["modules"]
-        }
-      },
-      {
-        name: "odoo_run_tests",
-        description: "Run tests for Odoo modules",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            modules: {
-              type: "string",
-              description: "Comma-separated list of modules to test (empty for all tests)"
-            },
-            testTags: {
-              type: "string",
-              description: "Test tags to filter tests (e.g., 'at_install', 'post_install')"
-            },
-            errorOnly: {
-              type: "boolean",
-              description: "Show only error output",
-              default: false
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_shell",
-        description: "Start interactive Odoo shell",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_switch_database",
-        description: "Switch the active project by copying odoo-<project>.conf to odoo.conf and restarting. IMPORTANT: this also changes which Odoo version (18 or 19) runs, because the version is determined by the project's conf (odoo_src/python_venv/addons_path). Use odoo_list_databases to see available projects.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            project: {
-              type: "string",
-              description: "Project name (e.g., 'hhfbs', 'tora', 'nellika')"
-            }
-          },
-          required: ["project"]
-        }
-      },
-      {
-        name: "odoo_new_project",
-        description: "Scaffold a NEW project: write odoo-<name>.conf for the chosen Odoo version (optionally with enterprise), symlink ./<name> to the project's repo (~/git/<name> by default), activate it, create the database (named after the project), and install the requested modules. WARNING: creates/recreates the <name> database.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo base directory (e.g., 'odoo18') — leave default",
-              default: "odoo18"
-            },
-            name: {
-              type: "string",
-              description: "Project name. Used for the config (odoo-<name>.conf), the database, and the ./<name> addons symlink."
-            },
-            odooVersion: {
-              type: "string",
-              description: "Odoo version for the project: '18' or '19'",
-              default: "18"
-            },
-            enterprise: {
-              type: "boolean",
-              description: "Include the Odoo Enterprise addons in the project's addons_path",
-              default: false
-            },
-            modules: {
-              type: "string",
-              description: "Comma-separated modules to install (e.g., 'sale,account,stock')"
-            },
-            repo: {
-              type: "string",
-              description: "Path to symlink ./<name> at (default ~/git/<name>, created empty if missing)"
-            },
-            httpPort: {
-              type: "number",
-              description: "http_port for the project (default 8069)"
-            },
-            noStart: {
-              type: "boolean",
-              description: "Do not start Odoo after scaffolding",
-              default: false
-            }
-          },
-          required: ["name"]
-        }
-      },
-      {
-        name: "odoo_list_databases",
-        description: "List available project configurations (odoo-<project>.conf) and the currently active database. Each project maps to one config; use odoo_switch_database to activate one.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_import_database",
-        description: "Import a backup into the ACTIVE project's database, then restart Odoo. Auto-detects format: Odoo/odoo.sh .zip (dump.sql [+ filestore]), plain .sql, gzipped .sql.gz/.gz, or pg_dump custom .dump. WARNING: destructive — this DROPS and recreates the active database.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            backupFile: {
-              type: "string",
-              description: "Path to the backup file (.zip, .sql, .sql.gz/.gz, or .dump)"
-            },
-            dbOnly: {
-              type: "boolean",
-              description: "Restore the database only, skip the filestore even if present in the zip",
-              default: false
-            },
-            neutralize: {
-              type: "boolean",
-              description: "Neutralize the database after restore (disable outgoing mail, crons, payment providers) — use for production/odoo.sh exact backups",
-              default: false
-            },
-            noStart: {
-              type: "boolean",
-              description: "Do not start Odoo after the import",
-              default: false
-            }
-          },
-          required: ["backupFile"]
-        }
-      },
-      {
-        name: "odoo_create_fresh_db",
-        description: "Create a FRESH (empty) database for the ACTIVE project, then restart Odoo (an empty database initializes the base modules on startup). WARNING: destructive — this DROPS the active database and removes its filestore.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            initModules: {
-              type: "string",
-              description: "Optional comma-separated modules to initialize the empty DB with (e.g., 'base,sale')"
-            },
-            noStart: {
-              type: "boolean",
-              description: "Do not start Odoo after creating the fresh database",
-              default: false
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_get_logs",
-        description: "Get the last N lines from the full, unfiltered odoo.log. Use this to see complete output that the filtered update/install/frontend tools omit.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            lines: {
-              type: "number",
-              description: "Number of lines to retrieve",
-              default: 50
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_get_project_dir",
-        description: "Get the path to a project's custom addon directory (e.g., ~/odoo/<project>). This is usually a symlink to ~/git/<project>",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            project: {
-              type: "string",
-              description: "Project name (e.g., 'hhfbs', 'tora', 'nellika')"
-            }
-          },
-          required: ["project"]
-        }
-      },
-      {
-        name: "odoo_get_odoo_addon_dir",
-        description: "Get the active Odoo core addons directory, read from the current odoo.conf addons_path. Resolves to _odoo18/ (CE 18) or _odoo19/ (CE 19) depending on the active project — use this to tell which version is running.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_get_enterprise_dir",
-        description: "Get the active Odoo Enterprise addons directory, read from the current odoo.conf addons_path. Resolves to _enterprise18/ (EE 18) or _enterprise19/ (EE 19) depending on the active project.",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_get_config_path",
-        description: "Get the path to the active Odoo configuration file (~/odoo/odoo.conf)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            }
-          }
-        }
-      },
-      {
-        name: "odoo_get_project_config_path",
-        description: "Get the path to a project-specific Odoo configuration file (~/odoo/odoo-<project>.conf)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            version: {
-              type: "string",
-              description: "Odoo version (e.g., 'odoo18')",
-              default: "odoo18"
-            },
-            project: {
-              type: "string",
-              description: "Project name (e.g., 'hhfbs', 'tora', 'nellika')"
-            }
-          },
-          required: ["project"]
+          required: ["action"]
         }
       }
     ];
@@ -590,68 +228,65 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
 
   private handleToolCall(name: string, args: any): OdooResult {
     args = args || {};
-    const config = odoo.resolveConfig(args.version);
+    const config = odoo.resolveConfig();
+    const action: string = args.action;
+
+    const need = (v: any, label: string) => {
+      if (v === undefined || v === null || v === "") {
+        throw new Error(`${name} action '${action}' requires '${label}'`);
+      }
+    };
 
     switch (name) {
-      case "odoo_start":
-        return odoo.startOdoo(config);
-      case "odoo_stop":
-        return odoo.stopOdoo(config);
-      case "odoo_restart":
-        return odoo.restartOdoo(config);
-      case "odoo_status":
-        return odoo.checkStatus(config);
-      case "odoo_update_modules":
-        return odoo.updateModules(config, args.modules, args.errorOnly);
-      case "odoo_update_module":
-        return odoo.updateModules(config, args.module, args.errorOnly);
-      case "odoo_install_modules":
-        return odoo.installModules(config, args.modules, args.errorOnly);
-      case "odoo_update_frontend":
-        return odoo.updateFrontend(config, args.modules, args.errorOnly);
-      case "odoo_run_tests":
-        return odoo.runTests(config, args.modules, args.testTags, args.errorOnly);
-      case "odoo_shell":
-        return odoo.startShell(config);
-      case "odoo_switch_database":
-        return odoo.switchDatabase(config, args.project);
-      case "odoo_new_project":
-        return odoo.newProject(config, args.name, {
-          version: args.odooVersion,
-          enterprise: args.enterprise,
-          modules: args.modules,
-          repo: args.repo,
-          httpPort: args.httpPort,
-          noStart: args.noStart,
-        });
-      case "odoo_list_databases":
-        return odoo.listDatabases(config);
-      case "odoo_import_database":
-        return odoo.importDatabase(config, args.backupFile, {
-          dbOnly: args.dbOnly,
-          neutralize: args.neutralize,
-          noStart: args.noStart,
-        });
-      case "odoo_create_fresh_db":
-        return odoo.createFreshDb(config, {
-          init: args.initModules,
-          noStart: args.noStart,
-        });
-      case "odoo_get_logs":
-        return odoo.getLogs(config, args.lines || 50);
-      case "odoo_get_project_dir":
-        return odoo.getProjectDir(config, args.project);
-      case "odoo_get_odoo_addon_dir":
-        return odoo.getOdooAddonDir(config);
-      case "odoo_get_enterprise_dir":
-        return odoo.getEnterpriseDir(config);
-      case "odoo_get_config_path":
-        return odoo.getConfigPath(config);
-      case "odoo_get_project_config_path":
-        return odoo.getProjectConfigPath(config, args.project);
+      case "odoo_server":
+        switch (action) {
+          case "start": return odoo.startOdoo(config);
+          case "stop": return odoo.stopOdoo(config);
+          case "restart": return odoo.restartOdoo(config);
+          case "status": return odoo.checkStatus(config);
+          case "shell": return odoo.startShell(config);
+        }
+        break;
+      case "odoo_modules":
+        switch (action) {
+          case "update": need(args.modules, "modules"); return odoo.updateModules(config, args.modules, args.errorOnly);
+          case "install": need(args.modules, "modules"); return odoo.installModules(config, args.modules, args.errorOnly);
+          case "frontend": need(args.modules, "modules"); return odoo.updateFrontend(config, args.modules, args.errorOnly);
+          case "test": return odoo.runTests(config, args.modules, args.testTags, args.errorOnly);
+        }
+        break;
+      case "odoo_project":
+        switch (action) {
+          case "list": return odoo.listDatabases(config);
+          case "switch": need(args.project, "project"); return odoo.switchDatabase(config, args.project);
+          case "new":
+            need(args.name, "name");
+            return odoo.newProject(config, args.name, {
+              version: args.odooVersion, enterprise: args.enterprise, modules: args.modules,
+              repo: args.repo, httpPort: args.httpPort, noStart: args.noStart,
+            });
+          case "import":
+            need(args.backupFile, "backupFile");
+            return odoo.importDatabase(config, args.backupFile, {
+              dbOnly: args.dbOnly, neutralize: args.neutralize, noStart: args.noStart,
+            });
+          case "fresh": return odoo.createFreshDb(config, { init: args.modules, noStart: args.noStart });
+        }
+        break;
+      case "odoo_info":
+        switch (action) {
+          case "logs": return odoo.getLogs(config, args.lines || 50);
+          case "config-path": return odoo.getConfigPath(config);
+          case "project-config": need(args.project, "project"); return odoo.getProjectConfigPath(config, args.project);
+          case "project-dir": need(args.project, "project"); return odoo.getProjectDir(config, args.project);
+          case "addons-dir": return odoo.getOdooAddonDir(config);
+          case "enterprise-dir": return odoo.getEnterpriseDir(config);
+        }
+        break;
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+    throw new Error(`${name}: unknown or missing action '${action}'`);
   }
 
   async run() {
