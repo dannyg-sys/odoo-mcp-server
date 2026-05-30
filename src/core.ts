@@ -390,6 +390,36 @@ export function createFreshDb(config: OdooConfig, opts: FreshOptions = {}): Odoo
   return { text: output };
 }
 
+export interface NewProjectOptions {
+  version?: string; // "18" | "19" (Odoo version); default 18
+  enterprise?: boolean;
+  modules?: string; // comma-separated
+  repo?: string; // path to symlink ./<name> at (default ~/git/<name>)
+  httpPort?: string | number;
+  noStart?: boolean;
+  force?: boolean;
+}
+
+// Scaffold a new project: writes odoo-<name>.conf for the chosen Odoo version
+// (+ optional enterprise / module list), symlinks ./<name> to the project's repo,
+// activates it, creates the database (named after the project), and installs the
+// requested modules. Delegates to manage_odoo.sh new.
+export function newProject(config: OdooConfig, name: string, opts: NewProjectOptions = {}): OdooResult {
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+    throw new Error(`Invalid project name '${name}' (use letters, digits, '-' or '_').`);
+  }
+  let args = `new ${name}`;
+  if (opts.version) args += ` --version ${opts.version}`;
+  if (opts.enterprise) args += " --enterprise";
+  if (opts.modules) args += ` --modules ${opts.modules}`;
+  if (opts.repo) args += ` --repo ${opts.repo}`;
+  if (opts.httpPort) args += ` --http-port ${opts.httpPort}`;
+  if (opts.noStart) args += " --no-start";
+  if (opts.force) args += " --force";
+  const output = executeCommand(config, manage(args));
+  return { text: output };
+}
+
 export function getProjectDir(config: OdooConfig, project: string): OdooResult {
   const projectPath = join(config.root, project);
 

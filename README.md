@@ -187,6 +187,7 @@ Idempotent — re-running skips what already exists.
 
 ### Database Management
 - `odoo_switch_database` - Activate a project's config and restart (also changes the running 18/19 version)
+- `odoo_new_project` - Scaffold a new project: write `odoo-<name>.conf`, symlink `./<name>`, create the DB, install modules, switch (`odooVersion`/`enterprise`/`modules`/`repo`/`noStart`)
 - `odoo_list_databases` - List available project configurations and the active one
 - `odoo_import_database` - Import a backup into the active DB (.zip/.sql/.sql.gz/.dump) and restart; `dbOnly`/`neutralize`/`noStart` options. **Destructive** (drops the active DB)
 - `odoo_create_fresh_db` - Drop the active DB+filestore and create an empty database, then restart; `initModules`/`noStart` options. **Destructive**

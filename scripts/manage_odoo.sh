@@ -419,6 +419,106 @@ create_fresh_db() {
     fi
 }
 
+# Scaffold a new project: write odoo-<name>.conf for the chosen Odoo version
+# (with optional enterprise + a list of modules), activate it, create the
+# database, and install the requested modules. Usage:
+#   new NAME [--version 18|19] [--enterprise] [--modules a,b,c]
+#            [--db NAME] [--http-port N] [--no-start] [--force]
+new_project() {
+    local name="" version="18" enterprise=0 modules="" http_port="8069" no_start=0 force=0 repo=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --version)    version="$2"; shift ;;
+            --enterprise) enterprise=1 ;;
+            --modules)    modules="$2"; shift ;;
+            --http-port)  http_port="$2"; shift ;;
+            --repo)       repo="$2"; shift ;;
+            --no-start)   no_start=1 ;;
+            --force)      force=1 ;;
+            -*)           echo "Error: unknown option '$1'" >&2; return 1 ;;
+            *)            if [ -z "$name" ]; then name="$1"; else echo "Error: unexpected argument '$1'" >&2; return 1; fi ;;
+        esac
+        shift
+    done
+
+    if [ -z "$name" ]; then
+        echo "Error: project name required"
+        echo "Usage: $0 new NAME [--version 18|19] [--enterprise] [--modules a,b,c] [--repo PATH] [--http-port N] [--no-start]"
+        return 1
+    fi
+    if [ "$version" != "18" ] && [ "$version" != "19" ]; then
+        echo "Error: --version must be 18 or 19"; return 1
+    fi
+
+    local conf="odoo-${name}.conf"
+    if [ -f "$conf" ] && [ "$force" != "1" ]; then
+        echo "Error: $conf already exists (use --force to overwrite)"; return 1
+    fi
+
+    local src ent
+    if [ "$version" = "19" ]; then src="_odoo19"; ent="_enterprise19"; else src="_odoo18"; ent="_enterprise18"; fi
+
+    local apath="./${src}/addons"
+    [ "$enterprise" = "1" ] && apath="${apath},./${ent}"
+    apath="${apath},./${name}"
+
+    # Custom-addons dir: keep the convention that ~/odoo/<name> is a SYMLINK to
+    # the project's repo (default ~/git/<name>, or --repo PATH). Create it now so
+    # the addons_path entry is valid from the start.
+    if [ ! -L "$name" ] && [ ! -e "$name" ]; then
+        local target="${repo:-$HOME/git/$name}"
+        if [ ! -e "$target" ]; then
+            mkdir -p "$target"
+            echo "Created new addons repo $target (git init it when ready)."
+        fi
+        ln -s "$target" "$name"
+        echo "Linked ./$name -> $target"
+    fi
+
+    echo "Writing $conf (Odoo $version$([ "$enterprise" = "1" ] && echo ', enterprise'))..."
+    {
+        echo "[options]"
+        echo "; -- Version selection (read by manage_odoo.sh) --"
+        if [ "$version" = "19" ]; then
+            echo "; odoo_src = _odoo19"
+            echo "; python_venv = _venv19"
+        else
+            echo "; (Odoo 18 — defaults _odoo18 / _venv18)"
+        fi
+        echo "; Modules this project needs (installed by 'odoo new'):"
+        echo "; install_modules = ${modules}"
+        echo ""
+        echo "admin_passwd = admin"
+        echo "db_name = ${name}"
+        echo "db_host = localhost"
+        echo "db_port = 5432"
+        echo "db_user = odoo"
+        echo "db_password ="
+        echo "http_port = ${http_port}"
+        echo "addons_path = ${apath}"
+        echo "data_dir = ./_data"
+        echo "filestore = ./_data/filestore"
+        echo ""
+        echo "unaccent = True"
+        echo "list_db = False"
+        echo "proxy_mode = True"
+        echo ""
+        echo "log_level = info"
+    } > "$conf"
+
+    # Activate the new config (back up the current one, like switch_config)
+    [ -f odoo.conf ] && cp odoo.conf odoo.conf.prev
+    cp "$conf" odoo.conf
+    echo "Activated project '$name'."
+
+    # Create the database and install the requested modules (reuses the fresh path)
+    local -a fresh_args=()
+    [ -n "$modules" ] && fresh_args+=(--init "$modules")
+    [ "$no_start" = "1" ] && fresh_args+=(--no-start)
+    create_fresh_db "${fresh_args[@]}"
+}
+
 # Display help
 show_help() {
     echo "Usage: $0 COMMAND [OPTIONS]"
@@ -440,6 +540,8 @@ show_help() {
     echo "  import_backup FILE   Alias for import"
     echo "  fresh [--init MODULES] [--no-start]  Drop the DB+filestore and create an empty database, then restart"
     echo "  create_fresh_db      Alias for fresh"
+    echo "  new NAME [--version 18|19] [--enterprise] [--modules a,b,c] [--repo PATH] [--http-port N] [--no-start]"
+    echo "                       Scaffold odoo-NAME.conf (db=NAME, addons symlink ./NAME), activate, create DB, install modules"
     echo
     echo "Options:"
     echo "  --error-only         Show only error output (suppresses warning messages)"
@@ -467,6 +569,8 @@ show_help() {
     echo "  $0 import dump.sql.gz             # Restore a gzipped SQL dump (db only)"
     echo "  $0 fresh                          # Empty database (base auto-installs on start)"
     echo "  $0 fresh --init base,sale         # Empty database, initialize base+sale"
+    echo "  $0 new acme --version 19 --enterprise --modules sale,account,stock"
+    echo "                                    # New 19+enterprise project 'acme' with those modules"
 }
 
 # Main script
@@ -546,6 +650,10 @@ case "$1" in
     "create_fresh_db"|"fresh")
         shift
         create_fresh_db "$@"
+        ;;
+    "new")
+        shift
+        new_project "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

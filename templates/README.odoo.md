@@ -106,6 +106,26 @@ odoo switch nellika          # make nellika the active project, restart Odoo
 Switching copies `odoo-nellika.conf` to `odoo.conf`, so the project's database,
 addons, and Odoo version all change together.
 
+## Starting a new project
+
+```bash
+odoo new acme --version 19 --enterprise --modules sale,account,stock
+```
+
+This scaffolds everything for a project called `acme`:
+
+- writes `odoo-acme.conf` (Odoo 19, enterprise, `addons_path` including `./acme`);
+- symlinks `./acme` → `~/git/acme` (creates an empty repo dir if missing; use
+  `--repo <path>` to point at an existing one);
+- activates the project, creates the database `acme`, and installs `sale`,
+  `account`, `stock` (plus `base`);
+- starts Odoo (add `--no-start` to skip).
+
+The database is always named after the project. Omit `--version` for Odoo 18,
+`--enterprise` for community-only, and `--modules` to start with an empty
+database. The requested modules are also recorded in the config as
+`; install_modules = …`.
+
 ## Loading a database
 
 ```bash

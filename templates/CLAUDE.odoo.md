@@ -59,6 +59,7 @@ odoo status                 # is Odoo running?
 odoo start | stop | restart
 odoo list                   # available projects + the active one
 odoo switch <project>       # activate odoo-<project>.conf and restart (changes 18/19 too)
+odoo new <name> [--version 18|19] [--enterprise] [--modules a,b,c]   # scaffold + switch to a new project
 odoo update <modules>       # update module(s), restart — FILTERED output
 odoo install <modules>      # install module(s)        — FILTERED output
 odoo frontend <modules>     # update frontend + restart — FILTERED output

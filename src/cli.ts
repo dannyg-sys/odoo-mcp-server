@@ -19,6 +19,12 @@ interface ParsedArgs {
   neutralize: boolean;
   noStart: boolean;
   init?: string;
+  odooVersion?: string;
+  enterprise: boolean;
+  modules?: string;
+  repo?: string;
+  httpPort?: string;
+  force: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -31,6 +37,12 @@ function parseArgs(argv: string[]): ParsedArgs {
   let neutralize = false;
   let noStart = false;
   let init: string | undefined;
+  let odooVersion: string | undefined;
+  let enterprise = false;
+  let modules: string | undefined;
+  let repo: string | undefined;
+  let httpPort: string | undefined;
+  let force = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -50,6 +62,18 @@ function parseArgs(argv: string[]): ParsedArgs {
       noStart = true;
     } else if (arg === "--init") {
       init = argv[++i];
+    } else if (arg === "--version") {
+      odooVersion = argv[++i];
+    } else if (arg === "--enterprise") {
+      enterprise = true;
+    } else if (arg === "--modules") {
+      modules = argv[++i];
+    } else if (arg === "--repo") {
+      repo = argv[++i];
+    } else if (arg === "--http-port") {
+      httpPort = argv[++i];
+    } else if (arg === "--force") {
+      force = true;
     } else if (arg.startsWith("--")) {
       throw new Error(`Unknown option: ${arg}`);
     } else {
@@ -58,7 +82,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const command = positionals.shift() || "help";
-  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init };
+  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init, odooVersion, enterprise, modules, repo, httpPort, force };
 }
 
 const HELP = `Odoo management CLI
@@ -76,6 +100,7 @@ Commands:
   test [modules]             Run tests (all, or for given module(s))
   shell                      Print the command to open an interactive Odoo shell
   switch <project>           Switch to project config (odoo-<project>.conf) and restart
+  new <name>                 Scaffold a new project (config + addons symlink + DB + modules), then switch to it
   list                       List available project configurations
   import <file>              Import a backup into the active DB (.zip/.sql/.sql.gz/.dump), then restart
   fresh                      Drop the active DB+filestore and create an empty database, then restart
@@ -93,12 +118,19 @@ Options:
   --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
   --db-only                  (import) restore database only, skip filestore
   --neutralize               (import) neutralize the DB after restore (disable mail/crons/payments)
-  --no-start                 (import/fresh) do not start Odoo afterwards
+  --no-start                 (import/fresh/new) do not start Odoo afterwards
   --init <modules>           (fresh) initialize the empty DB with these modules
+  --version <18|19>          (new) Odoo version for the project (default 18)
+  --enterprise               (new) include the enterprise addons in the config
+  --modules <a,b,c>          (new) modules to install in the new project
+  --repo <path>              (new) symlink ./<name> to this repo (default ~/git/<name>)
+  --http-port <n>            (new) http_port for the project (default 8069)
+  --force                    (new) overwrite an existing odoo-<name>.conf
 `;
 
 function run(): odoo.OdooResult {
-  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init } =
+  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init,
+          odooVersion, enterprise, modules, repo, httpPort, force } =
     parseArgs(process.argv.slice(2));
 
   if (command === "help" || command === "--help" || command === "-h") {
@@ -132,6 +164,17 @@ function run(): odoo.OdooResult {
     case "switch":
       if (!positionals[0]) throw new Error("switch requires a project name");
       return odoo.switchDatabase(config, positionals[0]);
+    case "new":
+      if (!positionals[0]) throw new Error("new requires a project name");
+      return odoo.newProject(config, positionals[0], {
+        version: odooVersion,
+        enterprise,
+        modules,
+        repo,
+        httpPort,
+        noStart,
+        force,
+      });
     case "list":
       return odoo.listDatabases(config);
     case "import":

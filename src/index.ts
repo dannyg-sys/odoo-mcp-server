@@ -370,6 +370,52 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
         }
       },
       {
+        name: "odoo_new_project",
+        description: "Scaffold a NEW project: write odoo-<name>.conf for the chosen Odoo version (optionally with enterprise), symlink ./<name> to the project's repo (~/git/<name> by default), activate it, create the database (named after the project), and install the requested modules. WARNING: creates/recreates the <name> database.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            version: {
+              type: "string",
+              description: "Odoo base directory (e.g., 'odoo18') — leave default",
+              default: "odoo18"
+            },
+            name: {
+              type: "string",
+              description: "Project name. Used for the config (odoo-<name>.conf), the database, and the ./<name> addons symlink."
+            },
+            odooVersion: {
+              type: "string",
+              description: "Odoo version for the project: '18' or '19'",
+              default: "18"
+            },
+            enterprise: {
+              type: "boolean",
+              description: "Include the Odoo Enterprise addons in the project's addons_path",
+              default: false
+            },
+            modules: {
+              type: "string",
+              description: "Comma-separated modules to install (e.g., 'sale,account,stock')"
+            },
+            repo: {
+              type: "string",
+              description: "Path to symlink ./<name> at (default ~/git/<name>, created empty if missing)"
+            },
+            httpPort: {
+              type: "number",
+              description: "http_port for the project (default 8069)"
+            },
+            noStart: {
+              type: "boolean",
+              description: "Do not start Odoo after scaffolding",
+              default: false
+            }
+          },
+          required: ["name"]
+        }
+      },
+      {
         name: "odoo_list_databases",
         description: "List available project configurations (odoo-<project>.conf) and the currently active database. Each project maps to one config; use odoo_switch_database to activate one.",
         inputSchema: {
@@ -569,6 +615,15 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
         return odoo.startShell(config);
       case "odoo_switch_database":
         return odoo.switchDatabase(config, args.project);
+      case "odoo_new_project":
+        return odoo.newProject(config, args.name, {
+          version: args.odooVersion,
+          enterprise: args.enterprise,
+          modules: args.modules,
+          repo: args.repo,
+          httpPort: args.httpPort,
+          noStart: args.noStart,
+        });
       case "odoo_list_databases":
         return odoo.listDatabases(config);
       case "odoo_import_database":
