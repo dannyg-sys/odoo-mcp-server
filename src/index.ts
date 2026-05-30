@@ -105,6 +105,17 @@ class OdooMCPServer {
                 type: "text",
                 text: `I can help you manage Odoo development environments. Here are the available commands:
 
+ENVIRONMENT LAYOUT (read this first)
+- Base directory (fixed): ~/git/odoo18 — holds manage_odoo.sh, the active
+  odoo.conf, and one odoo-<project>.conf per project.
+- Odoo sources live INSIDE the base: odoo/ (CE 18), enterprise/ (EE 18),
+  odoo19/ (CE 19), enterprise19/ (EE 19), plus venv/ and venv19/.
+- 18 vs 19 is per-PROJECT, not a separate tree. The active odoo.conf selects it
+  via its "; odoo_src" / "; python_venv" markers and addons_path. Switching the
+  project is what changes the running version — there is no version flag to set.
+  Use odoo_get_odoo_addon_dir to see which one is active (a path under odoo19/
+  means CE 19).
+
 SERVER CONTROL:
 - "Start Odoo" - Start the Odoo server
 - "Stop Odoo" - Stop the Odoo server
@@ -112,18 +123,25 @@ SERVER CONTROL:
 - "Check Odoo status" - See if Odoo is running
 
 MODULE MANAGEMENT:
-- "Update [module_name]" - Update specific modules
+- "Update [module_name]" - Update specific modules and restart
 - "Install [module_name]" - Install new modules
 - "Update frontend [module_name]" - Update frontend and restart
+Note: update/install/frontend output is filtered to errors and warnings
+(a clean run reports "✓ completed"). To see the full unfiltered log use
+odoo_get_logs.
 
-DATABASE:
-- "Switch to [project] database" - Switch database configuration
-- "List databases" - Show available database configs
+TESTING:
+- "Run tests [for module]" - Run module tests (optionally by test tags)
+
+DATABASE / PROJECTS:
+- "Switch to [project] database" - Activate odoo-<project>.conf and restart.
+  This ALSO changes which Odoo version (18/19) runs, per that conf.
+- "List databases" - Show available project configs and the active one
 
 DIRECTORIES:
 - "Where is the [project] directory?" - Get project addon path
-- "Where is the Odoo core directory?" - Get core addons path
-- "Where is the enterprise directory?" - Get enterprise addons path
+- "Where is the Odoo core directory?" - Get active core addons path (odoo/ or odoo19/)
+- "Where is the enterprise directory?" - Get active enterprise path (enterprise/ or enterprise19/)
 
 Use any of these commands naturally and I'll use the Odoo management tools to help you!`,
               },
@@ -195,7 +213,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_update_modules",
-        description: "Update one or more Odoo modules",
+        description: "Update one or more Odoo modules and restart. Output is filtered to errors and warnings (a clean run reports success); set errorOnly to suppress warnings too, or use odoo_get_logs for the full unfiltered log.",
         inputSchema: {
           type: "object",
           properties: {
@@ -219,7 +237,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_update_module",
-        description: "Update a single Odoo module (alias for odoo_update_modules)",
+        description: "Update a single Odoo module and restart (alias for odoo_update_modules). Output is filtered to errors and warnings; use odoo_get_logs for the full log.",
         inputSchema: {
           type: "object",
           properties: {
@@ -243,7 +261,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_install_modules",
-        description: "Install one or more Odoo modules",
+        description: "Install one or more Odoo modules. Output is filtered to errors and warnings; set errorOnly to suppress warnings, or use odoo_get_logs for the full log.",
         inputSchema: {
           type: "object",
           properties: {
@@ -267,7 +285,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_update_frontend",
-        description: "Update frontend modules and automatically restart Odoo",
+        description: "Update frontend modules and automatically restart Odoo. Output is filtered to errors and warnings; use odoo_get_logs for the full log.",
         inputSchema: {
           type: "object",
           properties: {
@@ -332,7 +350,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_switch_database",
-        description: "Switch between different Odoo database configurations",
+        description: "Switch the active project by copying odoo-<project>.conf to odoo.conf and restarting. IMPORTANT: this also changes which Odoo version (18 or 19) runs, because the version is determined by the project's conf (odoo_src/python_venv/addons_path). Use odoo_list_databases to see available projects.",
         inputSchema: {
           type: "object",
           properties: {
@@ -351,7 +369,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_list_databases",
-        description: "List available database configurations",
+        description: "List available project configurations (odoo-<project>.conf) and the currently active database. Each project maps to one config; use odoo_switch_database to activate one.",
         inputSchema: {
           type: "object",
           properties: {
@@ -384,7 +402,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_logs",
-        description: "Get the last N lines from Odoo logs",
+        description: "Get the last N lines from the full, unfiltered odoo.log. Use this to see complete output that the filtered update/install/frontend tools omit.",
         inputSchema: {
           type: "object",
           properties: {
@@ -422,7 +440,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_odoo_addon_dir",
-        description: "Get the path to the Odoo core addons directory (~/git/odoo18/odoo)",
+        description: "Get the active Odoo core addons directory, read from the current odoo.conf addons_path. Resolves to odoo/ (CE 18) or odoo19/ (CE 19) depending on the active project — use this to tell which version is running.",
         inputSchema: {
           type: "object",
           properties: {
@@ -436,7 +454,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_enterprise_dir",
-        description: "Get the path to the Odoo Enterprise addons directory (~/git/odoo18/enterprise)",
+        description: "Get the active Odoo Enterprise addons directory, read from the current odoo.conf addons_path. Resolves to enterprise/ (EE 18) or enterprise19/ (EE 19) depending on the active project.",
         inputSchema: {
           type: "object",
           properties: {
