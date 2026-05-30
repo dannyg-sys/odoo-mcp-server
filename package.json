@@ -4,10 +4,11 @@
   "description": "MCP server for managing Odoo development environments",
   "type": "module",
   "bin": {
-    "odoo-mcp-server": "./build/index.js"
+    "odoo-mcp-server": "./build/index.js",
+    "odoo-cli": "./build/cli.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x build/index.js",
+    "build": "tsc && chmod +x build/index.js build/cli.js",
     "watch": "tsc --watch",
     "prepare": "npm run build"
   },
