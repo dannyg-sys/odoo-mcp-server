@@ -7,6 +7,39 @@ custom-addon symlink. You manage all of it with the `odoo` command.
 > Looking for the rules Claude follows in this repo? See `CLAUDE.md`. This README
 > is the human-facing version of the same information.
 
+## Requirements & first-time setup
+
+You need:
+
+- **git**, **Python 3.10+**, and **PostgreSQL** (running, with a role matching the
+  configs' `db_user` — `odoo` by default).
+- **GitHub access to the private `odoo/enterprise` repository.** The Enterprise
+  sources (`_enterprise18` / `_enterprise19`) are cloned from `odoo/enterprise`,
+  which is private — add an SSH key to your GitHub account (or use an HTTPS
+  token) with access granted by your Odoo Enterprise subscription / partnership.
+  Use `SKIP_ENTERPRISE=1` for a community-only base.
+
+To bootstrap a fresh machine, the tooling repo ships a setup script that creates
+this base, clones Odoo CE 18/19 + Enterprise 18/19, builds the per-version
+virtualenvs, and seeds `_data`/`_scripts`/`_concepts`, the base docs, and a
+sample config:
+
+```bash
+cd ~/git/odoo-mcp-server
+npm run setup-env          # or: ./scripts/setup_odoo_env.sh
+```
+
+Env vars: `ENTERPRISE_REMOTE=https` (HTTPS/token instead of SSH),
+`SKIP_ENTERPRISE=1`, `FULL_CLONE=1` (full history vs shallow), `PYTHON=python3.11`,
+`ODOO_BASE=/path`. The script is idempotent — re-running skips whatever exists.
+
+Then create your first project config from the sample:
+
+```bash
+cp odoo-sample.conf odoo-myproject.conf   # edit db_name, addons_path, 18/19 markers
+odoo switch myproject
+```
+
 ## Layout
 
 System directories are prefixed with `_` so they stand out from the project

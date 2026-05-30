@@ -153,6 +153,22 @@ npm install && npm run build
 npm run setup
 ```
 
+## Bootstrap a fresh Odoo base
+
+`npm run setup` installs the *tooling*. To create the Odoo *base* itself on a new
+machine (the `~/odoo` layout: clone CE 18/19 + Enterprise 18/19, build the
+per-version venvs, seed `_data`/`_scripts`/`_concepts`, the docs, and a sample
+config), run the environment bootstrap:
+
+```bash
+npm run setup-env        # or: ./scripts/setup_odoo_env.sh
+```
+
+Requires git, Python 3.10+, PostgreSQL, and **GitHub access to the private
+`odoo/enterprise` repo** (SSH key or HTTPS token). Env vars: `ENTERPRISE_REMOTE=https`,
+`SKIP_ENTERPRISE=1`, `FULL_CLONE=1`, `PYTHON=python3.11`, `ODOO_BASE=/path`.
+Idempotent — re-running skips what already exists.
+
 ## Available Tools
 
 ### Server Control

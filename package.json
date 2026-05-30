@@ -11,7 +11,8 @@
     "build": "tsc && chmod +x build/index.js build/cli.js",
     "watch": "tsc --watch",
     "prepare": "npm run build",
-    "setup": "bash install.sh"
+    "setup": "bash install.sh",
+    "setup-env": "bash scripts/setup_odoo_env.sh"
   },
   "keywords": [
     "mcp",
