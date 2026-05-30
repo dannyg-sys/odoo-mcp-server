@@ -3,16 +3,25 @@
 // optional isError) — the entry points are responsible for formatting these for
 // their respective transports (MCP content envelopes vs. stdout/exit codes).
 //
-// Structure note: the base directory (~/git/odoo18) is fixed; the Odoo sources
+// Structure note: the base directory ($HOME/odoo) is fixed; the Odoo sources
 // (odoo/ = CE18, enterprise/ = EE18, odoo19/ = CE19, enterprise19/ = EE19) all
 // live inside it. The 18-vs-19 selection is per-project, driven entirely by the
 // active odoo.conf (the `; odoo_src` / `; python_venv` markers and addons_path);
 // manage_odoo.sh reads those, so no version branching is needed here.
+//
+// The engine itself is the vendored scripts/manage_odoo.sh; we invoke it by
+// absolute path and pass ODOO_BASE so it operates on the resolved base
+// regardless of where it (or its ~/.local/bin symlink) lives.
 
 import { execSync } from "child_process";
 import { existsSync, readFileSync, readdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import os from "os";
+
+// Absolute path to the vendored engine. This module lives at build/core.js, so
+// the repo root is one level up and the script is at <root>/scripts/manage_odoo.sh.
+const MANAGE_SCRIPT = join(dirname(dirname(fileURLToPath(import.meta.url))), "scripts", "manage_odoo.sh");
 
 export interface OdooConfig {
   root: string;
@@ -24,32 +33,46 @@ export interface OdooResult {
   isError?: boolean;
 }
 
-// Friendly names for known base directories. Any other version name resolves to
-// ~/git/<version> as well — the registry is only for nicer labels.
-const KNOWN_NAMES: Record<string, string> = {
-  odoo18: "Odoo 18",
-  odoo19: "Odoo 19",
-};
+// The base directory. Default is $HOME/odoo; we fall back to the legacy
+// $HOME/git/odoo18 location during the transition. Both must agree with the
+// default baked into scripts/manage_odoo.sh (ODOO_BASE).
+const DEFAULT_BASE = join(os.homedir(), "odoo");
+const LEGACY_BASE = join(os.homedir(), "git", "odoo18");
 
-export const DEFAULT_VERSION = "odoo18";
-
-// Resolve a base directory by version name (default odoo18). Validates that the
-// directory exists and contains manage_odoo.sh, so callers get a clear error
-// rather than a confusing shell failure later.
-export function resolveConfig(version?: string): OdooConfig {
-  const v = version || DEFAULT_VERSION;
-  const root = join(os.homedir(), "git", v);
-  const name = KNOWN_NAMES[v] || v;
-
-  if (!existsSync(root)) {
-    throw new Error(`Odoo base directory not found: ${root}`);
+// A directory is a usable Odoo base if it has an active odoo.conf or at least
+// one project config (odoo-<project>.conf). We no longer require manage_odoo.sh
+// to live inside it — the engine is vendored/global now.
+function isOdooBase(dir: string): boolean {
+  if (!existsSync(dir)) return false;
+  if (existsSync(join(dir, "odoo.conf"))) return true;
+  try {
+    return readdirSync(dir).some((f) => f.startsWith("odoo-") && f.endsWith(".conf"));
+  } catch {
+    return false;
   }
-  if (!existsSync(join(root, "manage_odoo.sh"))) {
-    throw new Error(
-      `manage_odoo.sh not found in ${root} — this base is not set up for management yet.`
-    );
+}
+
+// Resolve the base directory. An explicit override (absolute path, or a name
+// resolved under $HOME) always wins; otherwise — and for the legacy "odoo"/
+// "odoo18" tokens that older MCP schemas still default to — prefer $HOME/odoo,
+// then the legacy $HOME/git/odoo18 location.
+export function resolveConfig(baseOverride?: string): OdooConfig {
+  const isDefaultToken = !baseOverride || baseOverride === "odoo" || baseOverride === "odoo18";
+  if (!isDefaultToken) {
+    const root = baseOverride!.startsWith("/") ? baseOverride! : join(os.homedir(), baseOverride!);
+    if (!isOdooBase(root)) {
+      throw new Error(`Not an Odoo base directory (no odoo.conf / odoo-*.conf): ${root}`);
+    }
+    return { root, name: root };
   }
-  return { root, name };
+  for (const root of [DEFAULT_BASE, LEGACY_BASE]) {
+    if (isOdooBase(root)) {
+      return { root, name: "Odoo" };
+    }
+  }
+  throw new Error(
+    `No Odoo base found. Looked for ${DEFAULT_BASE} and ${LEGACY_BASE} (need an odoo.conf or odoo-*.conf).`
+  );
 }
 
 // List the available project configurations (odoo-<project>.conf) in a base dir.
@@ -64,11 +87,18 @@ export function listProjectNames(config: OdooConfig): string[] {
   }
 }
 
+// Build a command that invokes the vendored engine by absolute path.
+function manage(args: string): string {
+  return `"${MANAGE_SCRIPT}" ${args}`;
+}
+
 export function executeCommand(config: OdooConfig, command: string): string {
   try {
     console.error(`[Executing] ${command}`);
     const result = execSync(command, {
       cwd: config.root,
+      // Pin the engine's base to the resolved config so the script and core agree.
+      env: { ...process.env, ODOO_BASE: config.root },
       encoding: "utf-8",
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
       timeout: 300000, // 5 minute timeout
@@ -199,22 +229,22 @@ export function getAddonsPaths(config: OdooConfig): string[] {
 // --- Operations -----------------------------------------------------------
 
 export function startOdoo(config: OdooConfig): OdooResult {
-  const output = executeCommand(config, "./manage_odoo.sh start");
+  const output = executeCommand(config, manage("start"));
   return { text: `Odoo started:\n${output}` };
 }
 
 export function stopOdoo(config: OdooConfig): OdooResult {
-  const output = executeCommand(config, "./manage_odoo.sh stop");
+  const output = executeCommand(config, manage("stop"));
   return { text: `Odoo stopped:\n${output}` };
 }
 
 export function restartOdoo(config: OdooConfig): OdooResult {
-  const output = executeCommand(config, "./manage_odoo.sh restart");
+  const output = executeCommand(config, manage("restart"));
   return { text: `Odoo restarted:\n${output}` };
 }
 
 export function checkStatus(config: OdooConfig): OdooResult {
-  const output = executeCommand(config, "./manage_odoo.sh status");
+  const output = executeCommand(config, manage("status"));
   return { text: output };
 }
 
@@ -224,7 +254,7 @@ export function updateModules(
   errorOnly: boolean
 ): OdooResult {
   const errorFlag = errorOnly ? " --error-only" : "";
-  const output = executeCommand(config, `./manage_odoo.sh update ${modules}${errorFlag}`);
+  const output = executeCommand(config, manage(`update ${modules}${errorFlag}`));
   const filteredOutput = filterOdooOutput(output, errorOnly);
   return { text: `Modules updated: ${modules}\n${filteredOutput}` };
 }
@@ -235,7 +265,7 @@ export function installModules(
   errorOnly: boolean
 ): OdooResult {
   const errorFlag = errorOnly ? " --error-only" : "";
-  const output = executeCommand(config, `./manage_odoo.sh install ${modules}${errorFlag}`);
+  const output = executeCommand(config, manage(`install ${modules}${errorFlag}`));
   const filteredOutput = filterOdooOutput(output, errorOnly);
   return { text: `Modules installed: ${modules}\n${filteredOutput}` };
 }
@@ -246,7 +276,7 @@ export function updateFrontend(
   errorOnly: boolean
 ): OdooResult {
   const errorFlag = errorOnly ? " --error-only" : "";
-  const output = executeCommand(config, `./manage_odoo.sh frontend ${modules}${errorFlag}`);
+  const output = executeCommand(config, manage(`frontend ${modules}${errorFlag}`));
   const filteredOutput = filterOdooOutput(output, errorOnly);
   return { text: `Frontend modules updated: ${modules}\n${filteredOutput}` };
 }
@@ -257,18 +287,18 @@ export function runTests(
   testTags?: string,
   errorOnly?: boolean
 ): OdooResult {
-  let command = "./manage_odoo.sh test";
-  if (modules) command += ` ${modules}`;
-  if (testTags) command += ` ${testTags}`;
-  if (errorOnly) command += " --error-only";
+  let args = "test";
+  if (modules) args += ` ${modules}`;
+  if (testTags) args += ` ${testTags}`;
+  if (errorOnly) args += " --error-only";
 
-  const output = executeCommand(config, command);
+  const output = executeCommand(config, manage(args));
   return { text: `Test results:\n${output}` };
 }
 
 export function startShell(config: OdooConfig): OdooResult {
   return {
-    text: `To start Odoo shell, run this command in your terminal:\ncd ${config.root} && ./manage_odoo.sh shell\n\nNote: This is an interactive command that requires direct terminal access.`,
+    text: `To start an interactive Odoo shell, run this in your terminal:\nODOO_BASE="${config.root}" manage_odoo shell\n\nNote: this is interactive and needs direct terminal access.`,
   };
 }
 
@@ -313,7 +343,7 @@ export function switchDatabase(config: OdooConfig, project: string): OdooResult 
   // stops Odoo, backs up the current odoo.conf to odoo.conf.prev, activates
   // odoo-<project>.conf, and starts Odoo with the new configuration. On an
   // unknown project it prints the list of available configs (captured here).
-  const output = executeCommand(config, `./manage_odoo.sh switch_config ${project}`);
+  const output = executeCommand(config, manage(`switch_config ${project}`));
   return { text: `Switched to project: ${project}\n${output}` };
 }
 

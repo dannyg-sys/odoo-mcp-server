@@ -43,19 +43,24 @@ lighter option there — the 19 MCP tool schemas don't have to sit in context.
 Both paths run the same `core.ts`, including the identical output filtering.
 
 The Claude Code skill lives at `~/.claude/skills/odoo-manage/SKILL.md` (it calls
-`node ~/git/odoo-mcp-server/build/cli.js`). The orientation that Desktop needs is
-carried by the MCP itself — the `odoo-help` prompt and the tool descriptions —
-so no separate Desktop skill is required.
+`build/cli.js`, also installed as the `odoo` command). The orientation that
+Desktop needs is carried by the MCP itself — the `odoo-help` prompt and the tool
+descriptions — so no separate Desktop skill is required.
+
+The bash **engine** `manage_odoo.sh` is vendored at `scripts/manage_odoo.sh` and
+installed as the `manage_odoo` command; `core.ts` invokes it by absolute path and
+passes `ODOO_BASE` so it operates on the resolved base.
 
 ### Environment layout this manages
 
-- **Base (fixed):** `~/git/odoo18` — holds `manage_odoo.sh`, the active
-  `odoo.conf`, and one `odoo-<project>.conf` per project.
+- **Base (fixed):** `~/odoo` — holds the active `odoo.conf` and one
+  `odoo-<project>.conf` per project. (Legacy location `~/git/odoo18` is used as a
+  fallback until the base is moved.)
 - **Sources live inside the base:** `odoo/` (CE 18), `enterprise/` (EE 18),
   `odoo19/` (CE 19), `enterprise19/` (EE 19), plus `venv/` and `venv19/`.
 - **18 vs 19 is per-project, not a separate tree.** The active `odoo.conf`
   selects it via its `; odoo_src` / `; python_venv` markers and `addons_path`.
-  Switching project (`odoo_switch_database` / `odoo-cli switch`) is what changes
+  Switching project (`odoo_switch_database` / `odoo switch`) is what changes
   the running version — there is no version flag to set.
 
 ## Features
@@ -95,42 +100,46 @@ Add to your Claude Desktop config file (`~/Library/Application Support/Claude/cl
 
 The Odoo management tools will now be available in Claude.
 
-## CLI (Claude Code / terminal)
+## Terminal commands (`odoo` / `manage_odoo`)
 
-Build produces `build/cli.js` (exposed as the `odoo-cli` bin). The `odoo-manage`
-Claude Code skill calls it, and you can run it directly:
+`npm run setup` (below) installs two commands into `~/.local/bin`:
+
+- **`odoo`** — the smart front door (`build/cli.js`): same code as the skill/MCP,
+  with output filtering and path helpers. **Use this.**
+- **`manage_odoo`** — the raw bash engine (`scripts/manage_odoo.sh`): same verbs,
+  unfiltered output. Operates on `$ODOO_BASE` (default `~/odoo`).
 
 ```bash
-node ~/git/odoo-mcp-server/build/cli.js <command> [args] [options]
-
 # examples
-node ~/git/odoo-mcp-server/build/cli.js status
-node ~/git/odoo-mcp-server/build/cli.js list
-node ~/git/odoo-mcp-server/build/cli.js switch verita
-node ~/git/odoo-mcp-server/build/cli.js update nell_thai_qr --error-only
-node ~/git/odoo-mcp-server/build/cli.js test purchase_dual_unit
-node ~/git/odoo-mcp-server/build/cli.js logs --lines 200
+odoo status
+odoo list
+odoo switch verita
+odoo update nell_thai_qr --error-only
+odoo test purchase_dual_unit
+odoo logs --lines 200
 ```
 
-Run `odoo-cli help` for the full command list. Result text goes to stdout;
+Run `odoo help` for the full command list. Result text goes to stdout;
 `[Executing]`/`[Success]` diagnostics go to stderr. Options: `--error-only`,
-`--tags <tags>`, `--lines <n>`, `--base <version>` (default `odoo18`).
+`--tags <tags>`, `--lines <n>`, `--base <path>` (default `~/odoo`, fallback
+`~/git/odoo18`).
 
-## Install the Claude Code skill
+## Install everything (skill + commands)
 
-The `odoo-manage` skill (source in `skill/SKILL.md`) lets Claude Code drive the
-CLI. Install it into `~/.claude/skills` with:
+`install.sh` installs all three pieces: the `odoo-manage` Claude Code skill, the
+`odoo` command, and the `manage_odoo` command.
 
 ```bash
 cd ~/git/odoo-mcp-server
-npm run install-skill        # or: ./install-skill.sh
+npm run setup        # or: ./install.sh
 ```
 
-The installer builds `build/cli.js` if needed and renders the skill with the
-absolute path of *this* checkout, so it works no matter where the repo is
-cloned. Re-run with `--force` to overwrite an existing install
-(`./install-skill.sh --force`). Set `CLAUDE_SKILLS_DIR` to install somewhere
-other than `~/.claude/skills`. Start a new Claude Code session to pick it up.
+The installer builds `build/cli.js` if needed, renders the skill with the
+absolute path of *this* checkout (so it works no matter where the repo is
+cloned), and symlinks `odoo` / `manage_odoo` into `~/.local/bin`. Re-run with
+`--force` to overwrite an existing skill file (`./install.sh --force`). Env:
+`ODOO_BIN_DIR` (default `~/.local/bin`), `CLAUDE_SKILLS_DIR` (default
+`~/.claude/skills`). Start a new Claude Code session to pick up the skill.
 
 To set this up on another computer:
 
@@ -138,7 +147,7 @@ To set this up on another computer:
 git clone https://github.com/dannyg-sys/odoo-mcp-server.git ~/git/odoo-mcp-server
 cd ~/git/odoo-mcp-server
 npm install && npm run build
-npm run install-skill
+npm run setup
 ```
 
 ## Available Tools
@@ -193,18 +202,18 @@ npm run install-skill
 
 You normally don't. The Odoo version (18 vs 19) is selected per project by the
 active `odoo.conf` — switch project with `odoo_switch_database` (or
-`odoo-cli switch <project>`) and the version follows. See
+`odoo switch <project>`) and the version follows. See
 [Environment layout](#environment-layout-this-manages).
 
 ### Using a different base directory
 
-Both entry points default to the `~/git/odoo18` base. To target a different base
-under `~/git`, pass a version name: the MCP tools accept a `version` argument and
-the CLI accepts `--base <version>`, each resolving to `~/git/<version>`. The base
-must contain a `manage_odoo.sh` script or resolution fails with a clear error.
+The base defaults to `~/odoo`, falling back to `~/git/odoo18`. To target a
+different base, pass an absolute path: the MCP tools accept a `version` argument
+and the CLI accepts `--base <path>`. The directory must look like an Odoo base
+(have an `odoo.conf` or at least one `odoo-<project>.conf`).
 
 ```bash
-node ~/git/odoo-mcp-server/build/cli.js status --base odoo18
+odoo status --base /path/to/some/base
 ```
 
 After changing source, rebuild:
@@ -216,8 +225,9 @@ npm run build
 ## Requirements
 
 - Node.js 16+
-- Odoo development environment with `manage_odoo.sh` script
-- Claude Desktop (MCP) and/or Claude Code (skill + CLI)
+- An Odoo base directory (`~/odoo`) with project configs; the `manage_odoo.sh`
+  engine is installed by `npm run setup`
+- Claude Desktop (MCP) and/or Claude Code (skill + `odoo` command)
 
 ## Development
 
@@ -239,9 +249,9 @@ npm run watch
 
 ### Commands failing
 
-1. Check Odoo root path exists: `ls ~/git/odoo18`
-2. Verify `manage_odoo.sh` exists and is executable
-3. Check logs with `odoo_get_logs`
+1. Check the base path exists: `ls ~/odoo` (or the legacy `~/git/odoo18`)
+2. Verify the engine is installed: `command -v manage_odoo`
+3. Check logs with `odoo logs` (or the `odoo_get_logs` MCP tool)
 
 ## License
 

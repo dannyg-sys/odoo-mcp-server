@@ -106,8 +106,9 @@ class OdooMCPServer {
                 text: `I can help you manage Odoo development environments. Here are the available commands:
 
 ENVIRONMENT LAYOUT (read this first)
-- Base directory (fixed): ~/git/odoo18 — holds manage_odoo.sh, the active
-  odoo.conf, and one odoo-<project>.conf per project.
+- Base directory (fixed): ~/odoo — holds the active odoo.conf and one
+  odoo-<project>.conf per project. (The engine manage_odoo.sh is installed
+  globally, not in the base.)
 - Odoo sources live INSIDE the base: odoo/ (CE 18), enterprise/ (EE 18),
   odoo19/ (CE 19), enterprise19/ (EE 19), plus venv/ and venv19/.
 - 18 vs 19 is per-PROJECT, not a separate tree. The active odoo.conf selects it
@@ -421,7 +422,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_project_dir",
-        description: "Get the path to a project's custom addon directory (e.g., ~/git/odoo18/<project>). This is usually a symlink to ~/git/<project>",
+        description: "Get the path to a project's custom addon directory (e.g., ~/odoo/<project>). This is usually a symlink to ~/git/<project>",
         inputSchema: {
           type: "object",
           properties: {
@@ -468,7 +469,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_config_path",
-        description: "Get the path to the active Odoo configuration file (~/git/odoo18/odoo.conf)",
+        description: "Get the path to the active Odoo configuration file (~/odoo/odoo.conf)",
         inputSchema: {
           type: "object",
           properties: {
@@ -482,7 +483,7 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_get_project_config_path",
-        description: "Get the path to a project-specific Odoo configuration file (~/git/odoo18/<project>.conf)",
+        description: "Get the path to a project-specific Odoo configuration file (~/odoo/odoo-<project>.conf)",
         inputSchema: {
           type: "object",
           properties: {

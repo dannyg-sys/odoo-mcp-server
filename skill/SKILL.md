@@ -1,6 +1,6 @@
 ---
 name: odoo-manage
-description: Manage the local Odoo development environment under ~/git/odoo18 — start/stop/restart the server, update/install modules, run tests, switch between project databases (hhfbs, nellika, verita, tora, plasma, …), view logs, and locate addon/config dirs. Use when the user asks to start/stop/restart Odoo, update or install an Odoo module, run Odoo tests, switch the Odoo project or database, or check Odoo status/logs.
+description: Manage the local Odoo development environment under ~/odoo — start/stop/restart the server, update/install modules, run tests, switch between project databases (hhfbs, nellika, verita, tora, plasma, …), view logs, and locate addon/config dirs. Use when the user asks to start/stop/restart Odoo, update or install an Odoo module, run Odoo tests, switch the Odoo project or database, or check Odoo status/logs.
 tools:
   - Bash(node:*)
 ---
@@ -19,8 +19,9 @@ connected.
 
 ## Layout you are working with
 
-- **Base (fixed):** `~/git/odoo18` — holds `manage_odoo.sh`, the active
-  `odoo.conf`, and one `odoo-<project>.conf` per project.
+- **Base (fixed):** `~/odoo` — holds the active `odoo.conf` and one
+  `odoo-<project>.conf` per project. (The engine `manage_odoo.sh` is installed
+  globally, not in the base.)
 - **Sources live inside the base:** `odoo/` (CE 18), `enterprise/` (EE 18),
   `odoo19/` (CE 19), `enterprise19/` (EE 19), plus `venv/` and `venv19/`.
 - **18 vs 19 is per-project, not a separate tree.** The active `odoo.conf`
@@ -64,7 +65,7 @@ If `__ODOO_CLI__` is missing (fresh checkout), build it first:
 | `enterprise-dir` | Active Enterprise addons dir (enterprise/ or enterprise19/) |
 
 Options: `--error-only` (suppress warnings on update/install/frontend/test),
-`--tags <tags>`, `--lines <n>`, `--base <version>` (default `odoo18`).
+`--tags <tags>`, `--lines <n>`, `--base <path>` (default `~/odoo`, fallback `~/git/odoo18`).
 
 ## Output filtering
 

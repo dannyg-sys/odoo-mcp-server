@@ -73,7 +73,7 @@ Options:
   --error-only               Suppress warnings, show only errors (update/install/frontend/test)
   --tags <tags>              Test tags filter (test command)
   --lines <n>                Number of log lines (logs command, default 50)
-  --base <version>           Base directory under ~/git (default odoo18)
+  --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
 `;
 
 function run(): odoo.OdooResult {
