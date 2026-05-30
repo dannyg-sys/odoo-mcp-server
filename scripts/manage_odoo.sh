@@ -361,6 +361,64 @@ import_backup() {
     fi
 }
 
+# Create a FRESH (empty) database for the ACTIVE project: drop the existing
+# database and its filestore, then create an empty database. Starting Odoo
+# afterwards initializes it with the base modules. Flags: --init <modules> to
+# install/initialize specific modules right away, --no-start to skip the restart.
+create_fresh_db() {
+    local init_modules="" no_start=0
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --init)     init_modules="$2"; shift ;;
+            --no-start) no_start=1 ;;
+            -*)         echo "Error: unknown option '$1'" >&2; return 1 ;;
+            *)          echo "Error: unexpected argument '$1'" >&2; return 1 ;;
+        esac
+        shift
+    done
+
+    local db_name=$(grep "^db_name" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    local db_user=$(grep "^db_user" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    local filestore_dir=$(grep "^filestore" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+
+    echo "Creating a FRESH (empty) database for the active project:"
+    echo "  Database:  $db_name (user $db_user)"
+    echo "  Filestore: $filestore_dir/$db_name"
+    [ -n "$init_modules" ] && echo "  Init:      $init_modules"
+
+    # Stop Odoo if running
+    if check_odoo > /dev/null 2>&1; then
+        echo "Stopping Odoo..."
+        kill_odoo
+        rm -f odoo.pid
+    fi
+
+    echo "Dropping database $db_name if it exists..."
+    dropdb -U "$db_user" "$db_name" 2>/dev/null
+
+    if [ -d "$filestore_dir/$db_name" ]; then
+        echo "Removing existing filestore..."
+        rm -rf "$filestore_dir/$db_name"
+    fi
+
+    echo "Creating empty database $db_name..."
+    createdb -U "$db_user" "$db_name" || { echo "Failed to create database"; return 1; }
+    echo "Fresh database created."
+
+    if [ -n "$init_modules" ]; then
+        echo "Initializing modules: $init_modules"
+        install_modules "$init_modules"
+    fi
+
+    if [ "$no_start" = "1" ]; then
+        echo "Done (Odoo not started; --no-start given)."
+    else
+        echo "Starting Odoo (an empty database initializes base on startup)..."
+        start_odoo
+    fi
+}
+
 # Display help
 show_help() {
     echo "Usage: $0 COMMAND [OPTIONS]"
@@ -380,6 +438,8 @@ show_help() {
     echo "  switch PROJECT         Alias for switch_config"
     echo "  import FILE [--db-only] [--neutralize] [--no-start]  Import a backup into the active project, then restart"
     echo "  import_backup FILE   Alias for import"
+    echo "  fresh [--init MODULES] [--no-start]  Drop the DB+filestore and create an empty database, then restart"
+    echo "  create_fresh_db      Alias for fresh"
     echo
     echo "Options:"
     echo "  --error-only         Show only error output (suppresses warning messages)"
@@ -405,6 +465,8 @@ show_help() {
     echo "  $0 import backup.zip --db-only    # Restore database only (skip filestore)"
     echo "  $0 import prod.zip --neutralize   # Import then neutralize (safe dev copy)"
     echo "  $0 import dump.sql.gz             # Restore a gzipped SQL dump (db only)"
+    echo "  $0 fresh                          # Empty database (base auto-installs on start)"
+    echo "  $0 fresh --init base,sale         # Empty database, initialize base+sale"
 }
 
 # Main script
@@ -480,6 +542,10 @@ case "$1" in
     "import_backup"|"import")
         shift
         import_backup "$@"
+        ;;
+    "create_fresh_db"|"fresh")
+        shift
+        create_fresh_db "$@"
         ;;
     "help"|"-h"|"--help")
         show_help

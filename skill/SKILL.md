@@ -53,6 +53,7 @@ If `__ODOO_CLI__` is missing (fresh checkout), build it first:
 | `list` | List available project configs + the active one |
 | `switch <project>` | Activate `odoo-<project>.conf` and restart (changes 18/19 too) |
 | `import <file>` | Import a backup into the active DB (.zip/.sql/.sql.gz/.dump), then restart. **Destructive** (drops the DB). `--db-only`, `--neutralize`, `--no-start` |
+| `fresh` | Drop the active DB+filestore, create an empty database, then restart. **Destructive**. `--init <modules>`, `--no-start` |
 | `update <modules>` | Update module(s) (comma-separated) and restart — **filtered output** |
 | `install <modules>` | Install module(s) — **filtered output** |
 | `frontend <modules>` | Update frontend module(s) and restart — **filtered output** |
@@ -67,7 +68,7 @@ If `__ODOO_CLI__` is missing (fresh checkout), build it first:
 
 Options: `--error-only` (suppress warnings on update/install/frontend/test),
 `--tags <tags>`, `--lines <n>`, `--base <path>` (default `~/odoo`, fallback `~/git/odoo18`),
-and for `import`: `--db-only`, `--neutralize`, `--no-start`.
+for `import`: `--db-only`, `--neutralize`, `--no-start`; for `fresh`: `--init <modules>`, `--no-start`.
 
 ## Output filtering
 

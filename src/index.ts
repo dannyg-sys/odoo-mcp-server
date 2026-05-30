@@ -417,6 +417,29 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
         }
       },
       {
+        name: "odoo_create_fresh_db",
+        description: "Create a FRESH (empty) database for the ACTIVE project, then restart Odoo (an empty database initializes the base modules on startup). WARNING: destructive — this DROPS the active database and removes its filestore.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            version: {
+              type: "string",
+              description: "Odoo version (e.g., 'odoo18')",
+              default: "odoo18"
+            },
+            initModules: {
+              type: "string",
+              description: "Optional comma-separated modules to initialize the empty DB with (e.g., 'base,sale')"
+            },
+            noStart: {
+              type: "boolean",
+              description: "Do not start Odoo after creating the fresh database",
+              default: false
+            }
+          }
+        }
+      },
+      {
         name: "odoo_get_logs",
         description: "Get the last N lines from the full, unfiltered odoo.log. Use this to see complete output that the filtered update/install/frontend tools omit.",
         inputSchema: {
@@ -551,6 +574,11 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
         return odoo.importDatabase(config, args.backupFile, {
           dbOnly: args.dbOnly,
           neutralize: args.neutralize,
+          noStart: args.noStart,
+        });
+      case "odoo_create_fresh_db":
+        return odoo.createFreshDb(config, {
+          init: args.initModules,
           noStart: args.noStart,
         });
       case "odoo_get_logs":

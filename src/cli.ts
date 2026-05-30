@@ -18,6 +18,7 @@ interface ParsedArgs {
   dbOnly: boolean;
   neutralize: boolean;
   noStart: boolean;
+  init?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -29,6 +30,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let dbOnly = false;
   let neutralize = false;
   let noStart = false;
+  let init: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -46,6 +48,8 @@ function parseArgs(argv: string[]): ParsedArgs {
       neutralize = true;
     } else if (arg === "--no-start") {
       noStart = true;
+    } else if (arg === "--init") {
+      init = argv[++i];
     } else if (arg.startsWith("--")) {
       throw new Error(`Unknown option: ${arg}`);
     } else {
@@ -54,7 +58,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const command = positionals.shift() || "help";
-  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart };
+  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init };
 }
 
 const HELP = `Odoo management CLI
@@ -74,6 +78,7 @@ Commands:
   switch <project>           Switch to project config (odoo-<project>.conf) and restart
   list                       List available project configurations
   import <file>              Import a backup into the active DB (.zip/.sql/.sql.gz/.dump), then restart
+  fresh                      Drop the active DB+filestore and create an empty database, then restart
   logs                       Show the tail of odoo.log
   project-dir <project>      Show a project's custom addons directory
   addons-dir                 Show the active Odoo core addons directory
@@ -88,11 +93,12 @@ Options:
   --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
   --db-only                  (import) restore database only, skip filestore
   --neutralize               (import) neutralize the DB after restore (disable mail/crons/payments)
-  --no-start                 (import) do not start Odoo after the import
+  --no-start                 (import/fresh) do not start Odoo afterwards
+  --init <modules>           (fresh) initialize the empty DB with these modules
 `;
 
 function run(): odoo.OdooResult {
-  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart } =
+  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init } =
     parseArgs(process.argv.slice(2));
 
   if (command === "help" || command === "--help" || command === "-h") {
@@ -131,6 +137,8 @@ function run(): odoo.OdooResult {
     case "import":
       if (!positionals[0]) throw new Error("import requires a backup file path");
       return odoo.importDatabase(config, positionals[0], { dbOnly, neutralize, noStart });
+    case "fresh":
+      return odoo.createFreshDb(config, { init, noStart });
     case "logs":
       return odoo.getLogs(config, lines || 50);
     case "project-dir":

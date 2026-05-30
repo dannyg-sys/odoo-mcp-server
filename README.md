@@ -171,6 +171,7 @@ npm run setup
 - `odoo_switch_database` - Activate a project's config and restart (also changes the running 18/19 version)
 - `odoo_list_databases` - List available project configurations and the active one
 - `odoo_import_database` - Import a backup into the active DB (.zip/.sql/.sql.gz/.dump) and restart; `dbOnly`/`neutralize`/`noStart` options. **Destructive** (drops the active DB)
+- `odoo_create_fresh_db` - Drop the active DB+filestore and create an empty database, then restart; `initModules`/`noStart` options. **Destructive**
 
 ### Other
 - `odoo_shell` - Instructions for starting interactive shell

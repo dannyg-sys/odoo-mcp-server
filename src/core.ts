@@ -374,6 +374,22 @@ export function importDatabase(
   return { text: output };
 }
 
+export interface FreshOptions {
+  init?: string;
+  noStart?: boolean;
+}
+
+// Create a fresh (empty) database for the active project: drops the DB and its
+// filestore, recreates an empty DB, optionally initializes modules, and restarts
+// Odoo unless noStart. WARNING: destructive — it drops the active database.
+export function createFreshDb(config: OdooConfig, opts: FreshOptions = {}): OdooResult {
+  let args = "fresh";
+  if (opts.init) args += ` --init ${opts.init}`;
+  if (opts.noStart) args += " --no-start";
+  const output = executeCommand(config, manage(args));
+  return { text: output };
+}
+
 export function getProjectDir(config: OdooConfig, project: string): OdooResult {
   const projectPath = join(config.root, project);
 
