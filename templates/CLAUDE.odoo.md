@@ -21,11 +21,20 @@ symlinks (which have no prefix):
   _venv18/         Python venv for 18
   _venv19/         Python venv for 19
   _data/           filestore + sessions
+  _scripts/<project>/    ad-hoc helper scripts (test/seed/clean) — see below
+  _concepts/<project>/   exploratory / new-concept scripts (knowledge base)
   odoo.conf        ACTIVE config (a copy of the selected odoo-<project>.conf)
   odoo-<project>.conf   one per project (hhfbs, nellika, verita, tora, …)
   <project>        symlink -> ~/git/<repo>   (a project's custom addons)
   odoo.log         server log     odoo.pid  running server PID
 ```
+
+### Helper scripts (`_scripts/`) and concepts (`_concepts/`)
+Ad-hoc scripts (test, seed, clean, fix-ups) go in `_scripts/<project>/`, never in
+a project addon dir or the base root. `_concepts/<project>/` holds exploratory /
+new-concept scripts (including one-off XML-RPC tools) kept as a knowledge base.
+Each script starts with a short header comment of what it is for — max 3 lines,
+each ≤80 chars.
 
 ### 18 vs 19 is per-project, not a separate tree
 The active `odoo.conf` selects the Odoo version via its markers and addons_path:
