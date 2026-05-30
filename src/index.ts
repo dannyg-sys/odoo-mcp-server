@@ -568,14 +568,105 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
     } catch (error: any) {
       console.error(`[Command Error]`, error.message);
       // execSync throws if exit code is non-zero
+      // Combine both stdout and stderr to show all output including errors
+      let output = "";
       if (error.stdout) {
-        return error.stdout;
+        output += error.stdout;
       }
       if (error.stderr) {
         console.error(`[STDERR]`, error.stderr);
+        if (output) {
+          output += "\n\n=== STDERR ===\n";
+        }
+        output += error.stderr;
       }
+      
+      // If we have any output, return it instead of throwing
+      // This ensures we see warnings and errors from Odoo commands
+      if (output) {
+        return output;
+      }
+      
       throw new Error(`Command failed: ${error.message}`);
     }
+  }
+
+  private filterOdooOutput(output: string, errorOnly: boolean): string {
+    // Split output into lines
+    const lines = output.split('\n');
+    const filtered: string[] = [];
+    
+    // Track if we've seen any errors or warnings
+    let hasErrors = false;
+    let hasWarnings = false;
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      
+      // Always include these critical patterns
+      if (
+        lowerLine.includes('error') ||
+        lowerLine.includes('failed') ||
+        lowerLine.includes('exception') ||
+        lowerLine.includes('traceback') ||
+        lowerLine.includes('valueerror') ||
+        lowerLine.includes('attributeerror') ||
+        lowerLine.includes('importerror') ||
+        lowerLine.includes('modulenotfounderror') ||
+        lowerLine.includes('syntaxerror') ||
+        lowerLine.includes('could not') ||
+        lowerLine.includes('cannot') ||
+        lowerLine.includes('unable to')
+      ) {
+        filtered.push(line);
+        hasErrors = true;
+      }
+      // Include warnings only if not in error-only mode
+      else if (!errorOnly && (
+        lowerLine.includes('warning') ||
+        lowerLine.includes('deprecated') ||
+        lowerLine.includes('obsolete')
+      )) {
+        filtered.push(line);
+        hasWarnings = true;
+      }
+      // Include module update confirmation lines
+      else if (
+        lowerLine.includes('modules updated') ||
+        lowerLine.includes('modules installed') ||
+        lowerLine.includes('module loaded') ||
+        lowerLine.includes('updating module') ||
+        lowerLine.includes('installing module') ||
+        lowerLine.includes('server restarted') ||
+        lowerLine.includes('odoo started') ||
+        lowerLine.includes('frontend updated')
+      ) {
+        filtered.push(line);
+      }
+      // Include database-related messages
+      else if (
+        lowerLine.includes('database') ||
+        lowerLine.includes('migrating') ||
+        lowerLine.includes('init') && lowerLine.includes('module')
+      ) {
+        filtered.push(line);
+      }
+    }
+    
+    // If no errors or warnings found, return a simple success message
+    if (filtered.length === 0) {
+      return "✓ Operation completed successfully with no errors or warnings.";
+    }
+    
+    // Add summary at the top
+    let summary = "";
+    if (hasErrors) {
+      summary += "⚠️ ERRORS FOUND - Review the details below:\n\n";
+    } else if (hasWarnings) {
+      summary += "ℹ️ Warnings found (no errors):\n\n";
+    }
+    
+    return summary + filtered.join('\n');
   }
 
   private async startOdoo(config: OdooConfig): Promise<any> {
@@ -637,11 +728,15 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       config,
       `./manage_odoo.sh update ${modules}${errorFlag}`
     );
+    
+    // Filter output to only show relevant information
+    const filteredOutput = this.filterOdooOutput(output, errorOnly);
+    
     return {
       content: [
         {
           type: "text",
-          text: `Modules updated: ${modules}\n${output}`,
+          text: `Modules updated: ${modules}\n${filteredOutput}`,
         },
       ],
     };
@@ -657,11 +752,15 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       config,
       `./manage_odoo.sh install ${modules}${errorFlag}`
     );
+    
+    // Filter output to only show relevant information
+    const filteredOutput = this.filterOdooOutput(output, errorOnly);
+    
     return {
       content: [
         {
           type: "text",
-          text: `Modules installed: ${modules}\n${output}`,
+          text: `Modules installed: ${modules}\n${filteredOutput}`,
         },
       ],
     };
@@ -677,11 +776,15 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       config,
       `./manage_odoo.sh frontend ${modules}${errorFlag}`
     );
+    
+    // Filter output to only show relevant information
+    const filteredOutput = this.filterOdooOutput(output, errorOnly);
+    
     return {
       content: [
         {
           type: "text",
-          text: `Frontend modules updated: ${modules}\n${output}`,
+          text: `Frontend modules updated: ${modules}\n${filteredOutput}`,
         },
       ],
     };
@@ -920,9 +1023,33 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
     }
   }
 
+  // Parse addons_path entries from the active odoo.conf. Returns absolute paths
+  // resolved against config.root. Empty array if conf missing or addons_path absent.
+  private getAddonsPaths(config: OdooConfig): string[] {
+    const confPath = join(config.root, "odoo.conf");
+    if (!existsSync(confPath)) return [];
+    try {
+      const text = readFileSync(confPath, "utf8");
+      const match = text.match(/^addons_path\s*=\s*(.+)$/m);
+      if (!match) return [];
+      return match[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .map((s) => (s.startsWith("/") ? s : join(config.root, s)));
+    } catch {
+      return [];
+    }
+  }
+
   private async getOdooAddonDir(config: OdooConfig): Promise<any> {
-    const addonPath = join(config.root, "odoo");
-    
+    // Prefer the addons entry that ends in "/addons" (the Odoo core source's
+    // addons dir, e.g. odoo/addons or odoo19/addons). Falls back to odoo/.
+    const paths = this.getAddonsPaths(config);
+    let addonPath = paths.find((p) => p.endsWith("/addons")) || join(config.root, "odoo", "addons");
+    // Strip /addons to give the odoo source root for compatibility with prior callers
+    const odooSrcDir = addonPath.replace(/\/addons$/, "");
+
     if (!existsSync(addonPath)) {
       return {
         content: [
@@ -939,15 +1066,22 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       content: [
         {
           type: "text",
-          text: `Odoo core addons directory: ${addonPath}\n\nThis contains the standard Odoo community modules.`,
+          text: `Odoo core source: ${odooSrcDir}\nOdoo core addons directory: ${addonPath}\n\nThis contains the standard Odoo community modules.`,
         },
       ],
     };
   }
 
   private async getEnterpriseDir(config: OdooConfig): Promise<any> {
-    const enterprisePath = join(config.root, "enterprise");
-    
+    // Prefer an addons_path entry whose basename starts with "enterprise"
+    // (matches both ./enterprise and ./enterprise19). Falls back to enterprise/.
+    const paths = this.getAddonsPaths(config);
+    const enterprisePath =
+      paths.find((p) => {
+        const basename = p.split("/").pop() || "";
+        return basename.startsWith("enterprise");
+      }) || join(config.root, "enterprise");
+
     if (!existsSync(enterprisePath)) {
       return {
         content: [
