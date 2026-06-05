@@ -47,12 +47,15 @@ The Claude Code skill lives at `~/.claude/skills/odoo-manage/SKILL.md` (it calls
 Desktop needs is carried by the MCP itself — the `odoo-help` prompt and the tool
 descriptions — so no separate Desktop skill is required.
 
-A second Claude Code skill, **`odoo-stream`**, is vendored under `skill-stream/`
-(rendered to `~/.claude/skills/odoo-stream/` by the installer). Its
-`stream_odoo.sh` streams a remote nellika.sh / tcff Odoo database + filestore
-(over SSH, `pg_dump | pg_restore` and `tar | tar`, in parallel, no temp files)
-straight into the active local project. Local Postgres major must be ≥ the
-remote's (production is PG17).
+The **`stream`** capability — pull a remote nellika.sh / tcff Odoo database +
+filestore (over SSH, `pg_dump | pg_restore` and `tar | tar`, in parallel, no temp
+files) straight into the active local project — has a **single implementation**
+(the `stream` verb in `manage_odoo.sh`) exposed three ways: the `odoo stream`
+CLI command, the `odoo_project action=stream` MCP action, and a dedicated
+**`odoo-stream`** Claude Code skill. The skill is vendored under `skill-stream/`
+(rendered to `~/.claude/skills/odoo-stream/` by the installer) and is just a thin
+wrapper that `exec`s the engine verb. Local Postgres major must be ≥ the remote's
+(production is PG17).
 
 The bash **engine** `manage_odoo.sh` is vendored at `scripts/manage_odoo.sh` and
 installed as the `manage_odoo` command; `core.ts` invokes it by absolute path and
@@ -79,6 +82,9 @@ passes `ODOO_BASE` so it operates on the resolved base.
 - **Frontend Updates**: Update frontend modules with automatic server restart
 - **Testing**: Run Odoo tests with optional filtering
 - **Database Management**: Switch between databases, list available databases
+- **Backups & fresh DBs**: Import a backup (.zip/.sql/.dump) or reset to a fresh DB
+- **Production sync (`stream`)**: Stream a remote nellika.sh/tcff Odoo db+filestore
+  (over SSH, in parallel, no temp files) into the active local project
 - **Logging**: Retrieve Odoo log entries
 
 ## Installation
@@ -126,6 +132,7 @@ odoo switch verita
 odoo update nell_thai_qr --error-only
 odoo test purchase_dual_unit
 odoo import ~/Downloads/backup.zip --neutralize   # drops+restores the active DB
+odoo stream tcff_production_odoo --neutralize      # stream remote prod db+filestore into the active project
 odoo logs --lines 200
 ```
 
@@ -184,10 +191,11 @@ Desktop reliably loads them all):
 - **`odoo_server`** — `action`: `start` | `stop` | `restart` | `status` | `shell`
 - **`odoo_modules`** — `action`: `update` | `install` | `frontend` | `test`
   (`modules`, `testTags`, `errorOnly`); output is filtered to errors/warnings
-- **`odoo_project`** — `action`: `list` | `switch` | `new` | `import` | `fresh`
+- **`odoo_project`** — `action`: `list` | `switch` | `new` | `import` | `fresh` | `stream`
   (`project`, `name`, `odooVersion`, `enterprise`, `modules`, `repo`, `httpPort`,
-  `backupFile`, `dbOnly`, `neutralize`, `noStart`). **Destructive**: `import`/`fresh`
-  drop the active DB; `new` creates the named DB.
+  `backupFile`, `remoteHost`, `remoteDb`, `remoteDataDir`, `dbOnly`, `filestoreOnly`,
+  `neutralize`, `noStart`). **Destructive**: `import`/`fresh`/`stream` drop the active DB;
+  `new` creates the named DB.
 - **`odoo_info`** — `action`: `logs` | `config-path` | `project-config` |
   `project-dir` | `addons-dir` | `enterprise-dir` (`project`, `lines`)
 
@@ -202,6 +210,7 @@ full set of named subcommands — see "Terminal commands" above.)
 "Install stock_account and hr modules"
 "Run tests for the sale module"
 "Switch to the nellika database"
+"Stream tcff production into my local project and neutralize it"
 "Show me the last 100 log lines"
 "Where is the project directory for hhfbs?"
 "What's the path to the Odoo core addons?"
