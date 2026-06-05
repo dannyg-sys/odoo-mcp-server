@@ -47,6 +47,13 @@ The Claude Code skill lives at `~/.claude/skills/odoo-manage/SKILL.md` (it calls
 Desktop needs is carried by the MCP itself — the `odoo-help` prompt and the tool
 descriptions — so no separate Desktop skill is required.
 
+A second Claude Code skill, **`odoo-stream`**, is vendored under `skill-stream/`
+(rendered to `~/.claude/skills/odoo-stream/` by the installer). Its
+`stream_odoo.sh` streams a remote nellika.sh / tcff Odoo database + filestore
+(over SSH, `pg_dump | pg_restore` and `tar | tar`, in parallel, no temp files)
+straight into the active local project. Local Postgres major must be ≥ the
+remote's (production is PG17).
+
 The bash **engine** `manage_odoo.sh` is vendored at `scripts/manage_odoo.sh` and
 installed as the `manage_odoo` command; `core.ts` invokes it by absolute path and
 passes `ODOO_BASE` so it operates on the resolved base.
