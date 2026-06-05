@@ -421,6 +421,204 @@ create_fresh_db() {
     fi
 }
 
+# Stream a remote nellika.sh / tcff Odoo deployment's database + filestore
+# straight into the ACTIVE local project, over SSH, with no intermediate dump
+# files. Read-only on the remote (ssh + sourcing ~/scripts/odoo.env). Destructive
+# on the local active DB/filestore. DB and filestore transfers run in parallel.
+# Requires the local Postgres major >= the remote's (production is PG17); prefers
+# the Postgres.app 17 client tools, falling back to PATH. Usage:
+#   stream HOST [--remote-db N] [--remote-data-dir P] [--db-only|--filestore-only]
+#               [--neutralize] [--no-start] [--yes|-y]
+stream_remote_odoo() {
+    local remote_host="" remote_db="" remote_data_dir=""
+    local db_only=0 filestore_only=0 neutralize=0 no_start=0 assume_yes=0
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --remote-db)       remote_db="${2:-}"; shift ;;
+            --remote-data-dir) remote_data_dir="${2:-}"; shift ;;
+            --db-only)         db_only=1 ;;
+            --filestore-only)  filestore_only=1 ;;
+            --neutralize)      neutralize=1 ;;
+            --no-start)        no_start=1 ;;
+            --yes|-y)          assume_yes=1 ;;
+            -h|--help)
+                echo "Usage: stream HOST [--remote-db N] [--remote-data-dir P] [--db-only|--filestore-only] [--neutralize] [--no-start] [--yes|-y]"
+                echo "  Stream a remote nellika.sh/tcff Odoo db+filestore (over SSH) into the active project."
+                echo "  HOST is an ssh host with ~/scripts/odoo.env (e.g. nellika_production_odoo, tcff_production_odoo)."
+                return 0 ;;
+            -*)                echo "Error: unknown option '$1'" >&2; return 1 ;;
+            *)                 if [ -z "$remote_host" ]; then remote_host="$1"; else echo "Error: unexpected argument '$1'" >&2; return 1; fi ;;
+        esac
+        shift
+    done
+
+    [ -n "$remote_host" ] || { echo "Error: stream requires a remote ssh host" >&2; return 1; }
+    [ "$db_only" = 1 ] && [ "$filestore_only" = 1 ] && { echo "Error: --db-only and --filestore-only are mutually exclusive" >&2; return 1; }
+
+    # Active local project, read from odoo.conf (same inline style as fresh/import).
+    local local_db local_user local_host local_port filestore_conf
+    local_db=$(grep "^db_name" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    local_user=$(grep "^db_user" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    local_host=$(grep "^db_host" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    local_port=$(grep "^db_port" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    filestore_conf=$(grep "^filestore" odoo.conf | cut -d'=' -f2 | tr -d ' ')
+    [ -n "$local_db" ]   || { echo "Error: could not read db_name from odoo.conf" >&2; return 1; }
+    [ -n "$local_user" ] || { echo "Error: could not read db_user from odoo.conf" >&2; return 1; }
+    [ -n "$filestore_conf" ] || filestore_conf="./_data/filestore"
+
+    # Resolve the (usually relative) filestore dir against the base.
+    local local_filestore_dir
+    case "$filestore_conf" in
+        /*) local_filestore_dir="$filestore_conf" ;;
+        *)  local_filestore_dir="$ODOO_BASE/${filestore_conf#./}" ;;
+    esac
+    local local_filestore_target="$local_filestore_dir/$local_db"
+
+    # psql/createdb/dropdb connection args from the active conf.
+    local pg_conn=(-U "$local_user")
+    [ -n "$local_host" ] && pg_conn+=(-h "$local_host")
+    [ -n "$local_port" ] && pg_conn+=(-p "$local_port")
+
+    # Prefer Postgres.app 17 client tools (PATH may be an older major that cannot
+    # restore a pg17 dump); fall back to PATH.
+    local pg17_bin="/Applications/Postgres.app/Contents/Versions/17/bin"
+    local pg_restore createdb_bin dropdb_bin psql_bin
+    pgtool() { if [ -x "$pg17_bin/$1" ]; then echo "$pg17_bin/$1"; else echo "$1"; fi; }
+    pg_restore=$(pgtool pg_restore); createdb_bin=$(pgtool createdb)
+    dropdb_bin=$(pgtool dropdb);     psql_bin=$(pgtool psql)
+
+    # pv is optional — fall back to cat if missing.
+    local pv
+    if command -v pv >/dev/null 2>&1; then pv="pv"; elif [ -x /opt/homebrew/bin/pv ]; then pv="/opt/homebrew/bin/pv"; else pv="cat"; fi
+
+    # Discover the remote db + data_dir (read-only) unless overridden.
+    if [ -z "$remote_db" ] || [ -z "$remote_data_dir" ]; then
+        echo "Discovering remote env on $remote_host (read-only)..." >&2
+        local discovered
+        discovered=$(ssh "$remote_host" '. ~/scripts/odoo.env; echo "$odoo_db|$data_dir"') \
+            || { echo "Error: ssh discovery failed on $remote_host (is ~/scripts/odoo.env present?)" >&2; return 1; }
+        [ -z "$remote_db" ]       && remote_db="${discovered%%|*}"
+        [ -z "$remote_data_dir" ] && remote_data_dir="${discovered##*|}"
+    fi
+    [ -n "$remote_db" ]       || { echo "Error: could not discover remote odoo_db (use --remote-db)" >&2; return 1; }
+    [ -n "$remote_data_dir" ] || { echo "Error: could not discover remote data_dir (use --remote-data-dir)" >&2; return 1; }
+
+    local do_db=1 do_fs=1
+    [ "$filestore_only" = 1 ] && do_db=0
+    [ "$db_only" = 1 ] && do_fs=0
+
+    echo "==================================================================="
+    echo " Stream remote Odoo  ->  LOCAL dev (DESTRUCTIVE on local)"
+    echo "-------------------------------------------------------------------"
+    echo " Remote host        : $remote_host"
+    echo " Remote db          : $remote_db"
+    echo " Remote data_dir    : $remote_data_dir"
+    echo " Remote filestore   : $remote_data_dir/filestore/$remote_db"
+    echo "-------------------------------------------------------------------"
+    echo " Local base         : $ODOO_BASE"
+    echo " Local db (target)  : $local_db (user $local_user)"
+    echo " Local filestore    : $local_filestore_target"
+    echo " pg client tools    : ${pg_restore%/*}"
+    echo " progress (pv)      : $pv"
+    echo "-------------------------------------------------------------------"
+    echo " Database stream    : $([ "$do_db" = 1 ] && echo yes || echo SKIPPED)"
+    echo " Filestore stream   : $([ "$do_fs" = 1 ] && echo yes || echo SKIPPED)"
+    echo " Neutralize after   : $([ "$neutralize" = 1 ] && echo yes || echo no)"
+    echo " Start Odoo after   : $([ "$no_start" = 1 ] && echo no || echo yes)"
+    echo "==================================================================="
+
+    if [ "$assume_yes" != 1 ]; then
+        printf "Proceed? This will DROP local db '%s' and replace its filestore. [y/N] " "$local_db"
+        read -r ans
+        case "$ans" in y|Y|yes|YES) ;; *) echo "Aborted."; return 0 ;; esac
+    fi
+
+    echo ">> Stopping local Odoo..." >&2
+    kill_odoo; rm -f odoo.pid
+
+    stream_db() {
+        echo ">> [db] terminating connections to $local_db ..." >&2
+        "$psql_bin" "${pg_conn[@]}" -d postgres -v ON_ERROR_STOP=1 -c \
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$local_db' AND pid <> pg_backend_pid();" >/dev/null
+
+        echo ">> [db] dropdb + createdb $local_db ..." >&2
+        "$dropdb_bin" "${pg_conn[@]}" --if-exists "$local_db"
+        "$createdb_bin" "${pg_conn[@]}" -O "$local_user" "$local_db"
+
+        echo ">> [db] creating extensions (unaccent, pg_trgm) ..." >&2
+        "$psql_bin" "${pg_conn[@]}" -d "$local_db" -v ON_ERROR_STOP=1 \
+            -c "CREATE EXTENSION IF NOT EXISTS unaccent;" \
+            -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" \
+            -c "ALTER FUNCTION unaccent(text) IMMUTABLE;" >/dev/null
+
+        echo ">> [db] streaming pg_dump '$remote_db' | $pv | pg_restore -> '$local_db' ..." >&2
+        # ControlPath=none forces an independent ssh: the parallel db + filestore
+        # sessions to the same host must NOT share a ControlMaster socket, or one
+        # loses the race ("disabling multiplexing") and yields an EMPTY pg_dump.
+        ssh -o ControlPath=none "$remote_host" '. ~/scripts/odoo.env; pg_dump -Fc --no-owner --no-privileges "$odoo_db"' \
+            | "$pv" \
+            | "$pg_restore" --no-owner "${pg_conn[@]}" -d "$local_db"
+        local rc=("${PIPESTATUS[@]}")
+        if [ "${rc[0]}" -ne 0 ]; then
+            echo ">> [db] ERROR: remote pg_dump/ssh failed (rc=${rc[0]}) — empty dump, aborting." >&2
+            return 1
+        fi
+        # A non-zero pg_restore is usually just ownership/role notices — tolerate.
+        [ "${rc[2]:-0}" -ne 0 ] && echo ">> [db] pg_restore reported errors (often harmless ownership/role notices)." >&2
+        echo ">> [db] done." >&2
+    }
+
+    stream_filestore() {
+        echo ">> [fs] preparing $local_filestore_dir ..." >&2
+        mkdir -p "$local_filestore_dir"
+
+        echo ">> [fs] streaming tar of remote filestore '$remote_db' -> $local_filestore_dir ..." >&2
+        # ControlPath=none: independent ssh (see the db stream note above).
+        ssh -o ControlPath=none "$remote_host" '. ~/scripts/odoo.env; tar -C "$data_dir/filestore" -zc "$odoo_db"' \
+            | "$pv" \
+            | tar -C "$local_filestore_dir" -zx
+        local rc=("${PIPESTATUS[@]}")
+        if [ "${rc[0]}" -ne 0 ] || [ "${rc[2]:-0}" -ne 0 ]; then
+            echo ">> [fs] ERROR: remote tar/ssh or local extract failed (ssh=${rc[0]}, tar=${rc[2]:-?})." >&2
+            return 1
+        fi
+
+        if [ "$remote_db" != "$local_db" ]; then
+            echo ">> [fs] renaming extracted '$remote_db' -> '$local_db' ..." >&2
+            [ -d "$local_filestore_target" ] && rm -rf "$local_filestore_target"
+            mv "$local_filestore_dir/$remote_db" "$local_filestore_target"
+        fi
+        echo ">> [fs] done." >&2
+    }
+
+    # Run both in parallel; collect exit codes.
+    local db_pid="" fs_pid="" db_rc=0 fs_rc=0
+    if [ "$do_db" = 1 ]; then stream_db & db_pid=$!; fi
+    if [ "$do_fs" = 1 ]; then stream_filestore & fs_pid=$!; fi
+    if [ -n "$db_pid" ]; then wait "$db_pid" || db_rc=$?; fi
+    if [ -n "$fs_pid" ]; then wait "$fs_pid" || fs_rc=$?; fi
+
+    [ "$db_rc" -ne 0 ] && echo "Error: database stream failed (rc=$db_rc)" >&2
+    [ "$fs_rc" -ne 0 ] && echo "Error: filestore stream failed (rc=$fs_rc)" >&2
+    if [ "$db_rc" -ne 0 ] || [ "$fs_rc" -ne 0 ]; then
+        echo "Error: one or more streams failed; local Odoo left stopped." >&2
+        return 1
+    fi
+
+    if [ "$neutralize" = 1 ]; then
+        neutralize_db || echo "Warning: neutralize step reported errors." >&2
+    fi
+
+    if [ "$no_start" = 1 ]; then
+        echo "Done (Odoo not started; --no-start given)."
+    else
+        echo ">> Starting local Odoo..." >&2
+        start_odoo
+        echo "Done."
+    fi
+}
+
 # Scaffold a new project: write odoo-<name>.conf for the chosen Odoo version
 # (with optional enterprise + a list of modules), activate it, create the
 # database, and install the requested modules. Usage:
@@ -542,6 +740,8 @@ show_help() {
     echo "  import_backup FILE   Alias for import"
     echo "  fresh [--init MODULES] [--no-start]  Drop the DB+filestore and create a fresh DB (base + MODULES), then restart"
     echo "  create_fresh_db      Alias for fresh"
+    echo "  stream HOST [--remote-db N] [--remote-data-dir P] [--db-only|--filestore-only] [--neutralize] [--no-start] [--yes]"
+    echo "                       Stream a remote nellika.sh/tcff Odoo db+filestore (over SSH) into the active project, then restart"
     echo "  new NAME [--version 18|19] [--enterprise] [--modules a,b,c] [--repo PATH] [--http-port N] [--no-start]"
     echo "                       Scaffold odoo-NAME.conf (db=NAME, addons symlink ./NAME), activate, create DB, install modules"
     echo
@@ -652,6 +852,10 @@ case "$1" in
     "create_fresh_db"|"fresh")
         shift
         create_fresh_db "$@"
+        ;;
+    "stream")
+        shift
+        stream_remote_odoo "$@"
         ;;
     "new")
         shift

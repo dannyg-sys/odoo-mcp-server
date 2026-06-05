@@ -16,8 +16,11 @@ interface ParsedArgs {
   lines?: number;
   base?: string;
   dbOnly: boolean;
+  filestoreOnly: boolean;
   neutralize: boolean;
   noStart: boolean;
+  remoteDb?: string;
+  remoteDataDir?: string;
   init?: string;
   odooVersion?: string;
   enterprise: boolean;
@@ -34,8 +37,11 @@ function parseArgs(argv: string[]): ParsedArgs {
   let lines: number | undefined;
   let base: string | undefined;
   let dbOnly = false;
+  let filestoreOnly = false;
   let neutralize = false;
   let noStart = false;
+  let remoteDb: string | undefined;
+  let remoteDataDir: string | undefined;
   let init: string | undefined;
   let odooVersion: string | undefined;
   let enterprise = false;
@@ -56,10 +62,16 @@ function parseArgs(argv: string[]): ParsedArgs {
       base = argv[++i];
     } else if (arg === "--db-only") {
       dbOnly = true;
+    } else if (arg === "--filestore-only") {
+      filestoreOnly = true;
     } else if (arg === "--neutralize") {
       neutralize = true;
     } else if (arg === "--no-start") {
       noStart = true;
+    } else if (arg === "--remote-db") {
+      remoteDb = argv[++i];
+    } else if (arg === "--remote-data-dir") {
+      remoteDataDir = argv[++i];
     } else if (arg === "--init") {
       init = argv[++i];
     } else if (arg === "--version") {
@@ -82,7 +94,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const command = positionals.shift() || "help";
-  return { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init, odooVersion, enterprise, modules, repo, httpPort, force };
+  return { command, positionals, errorOnly, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart, remoteDb, remoteDataDir, init, odooVersion, enterprise, modules, repo, httpPort, force };
 }
 
 const HELP = `Odoo management CLI
@@ -104,6 +116,7 @@ Commands:
   list                       List available project configurations
   import <file>              Import a backup into the active DB (.zip/.sql/.sql.gz/.dump), then restart
   fresh                      Drop the active DB+filestore and create an empty database, then restart
+  stream <host>              Stream a remote nellika.sh/tcff Odoo db+filestore (over SSH) into the active project, then restart
   logs                       Show the tail of odoo.log
   project-dir <project>      Show a project's custom addons directory
   addons-dir                 Show the active Odoo core addons directory
@@ -116,9 +129,12 @@ Options:
   --tags <tags>              Test tags filter (test command)
   --lines <n>                Number of log lines (logs command, default 50)
   --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
-  --db-only                  (import) restore database only, skip filestore
-  --neutralize               (import) neutralize the DB after restore (disable mail/crons/payments)
-  --no-start                 (import/fresh/new) do not start Odoo afterwards
+  --db-only                  (import/stream) restore database only, skip filestore
+  --filestore-only           (stream) stream the filestore only, skip the database
+  --remote-db <name>         (stream) override the auto-discovered remote db name
+  --remote-data-dir <path>   (stream) override the auto-discovered remote data_dir
+  --neutralize               (import/stream) neutralize the DB after restore (disable mail/crons/payments)
+  --no-start                 (import/fresh/new/stream) do not start Odoo afterwards
   --init <modules>           (fresh) initialize the empty DB with these modules
   --version <18|19>          (new) Odoo version for the project (default 18)
   --enterprise               (new) include the enterprise addons in the config
@@ -129,7 +145,8 @@ Options:
 `;
 
 function run(): odoo.OdooResult {
-  const { command, positionals, errorOnly, tags, lines, base, dbOnly, neutralize, noStart, init,
+  const { command, positionals, errorOnly, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart,
+          remoteDb, remoteDataDir, init,
           odooVersion, enterprise, modules, repo, httpPort, force } =
     parseArgs(process.argv.slice(2));
 
@@ -182,6 +199,11 @@ function run(): odoo.OdooResult {
       return odoo.importDatabase(config, positionals[0], { dbOnly, neutralize, noStart });
     case "fresh":
       return odoo.createFreshDb(config, { init, noStart });
+    case "stream":
+      if (!positionals[0]) throw new Error("stream requires a remote ssh host");
+      return odoo.streamDatabase(config, positionals[0], {
+        remoteDb, remoteDataDir, dbOnly, filestoreOnly, neutralize, noStart,
+      });
     case "logs":
       return odoo.getLogs(config, lines || 50);
     case "project-dir":

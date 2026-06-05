@@ -92,7 +92,7 @@ function manage(args: string): string {
   return `"${MANAGE_SCRIPT}" ${args}`;
 }
 
-export function executeCommand(config: OdooConfig, command: string): string {
+export function executeCommand(config: OdooConfig, command: string, timeoutMs = 300000): string {
   try {
     console.error(`[Executing] ${command}`);
     const result = execSync(command, {
@@ -101,7 +101,7 @@ export function executeCommand(config: OdooConfig, command: string): string {
       env: { ...process.env, ODOO_BASE: config.root },
       encoding: "utf-8",
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      timeout: 300000, // 5 minute timeout
+      timeout: timeoutMs, // default 5 min; long ops (stream) pass a larger value
     });
     console.error(`[Success] Command completed`);
     return result;
@@ -387,6 +387,41 @@ export function createFreshDb(config: OdooConfig, opts: FreshOptions = {}): Odoo
   if (opts.init) args += ` --init ${opts.init}`;
   if (opts.noStart) args += " --no-start";
   const output = executeCommand(config, manage(args));
+  return { text: output };
+}
+
+export interface StreamOptions {
+  remoteDb?: string;
+  remoteDataDir?: string;
+  dbOnly?: boolean;
+  filestoreOnly?: boolean;
+  neutralize?: boolean;
+  noStart?: boolean;
+}
+
+// Stream a remote nellika.sh / tcff Odoo deployment's database + filestore over
+// SSH straight into the ACTIVE project. Delegates to manage_odoo.sh stream
+// (the single implementation also used by the odoo-stream skill): it discovers
+// the remote db/data_dir from the remote ~/scripts/odoo.env, drops/recreates the
+// local DB, streams pg_dump|pg_restore and tar|tar in parallel, optionally
+// neutralizes, and restarts Odoo unless noStart. WARNING: destructive — it drops
+// the active database and replaces its filestore. Always passes --yes: this
+// non-TTY path can't answer the engine's confirmation prompt, and the deliberate
+// CLI/MCP call is itself the confirmation (same as import/fresh).
+export function streamDatabase(
+  config: OdooConfig,
+  remoteHost: string,
+  opts: StreamOptions = {}
+): OdooResult {
+  let args = `stream "${remoteHost}" --yes`;
+  if (opts.remoteDb) args += ` --remote-db "${opts.remoteDb}"`;
+  if (opts.remoteDataDir) args += ` --remote-data-dir "${opts.remoteDataDir}"`;
+  if (opts.dbOnly) args += " --db-only";
+  if (opts.filestoreOnly) args += " --filestore-only";
+  if (opts.neutralize) args += " --neutralize";
+  if (opts.noStart) args += " --no-start";
+  // Streaming a production db+filestore over SSH can exceed the default 5 min.
+  const output = executeCommand(config, manage(args), 1800000);
   return { text: output };
 }
 

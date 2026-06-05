@@ -190,11 +190,11 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
       },
       {
         name: "odoo_project",
-        description: "Manage projects and their databases. action: list (projects + active one) | switch (activate odoo-<project>.conf and restart; also changes the running Odoo 18/19) | new (scaffold a new project) | import (load a backup into the active DB) | fresh (reset the active DB to a fresh one initialized with base, + 'modules'). DESTRUCTIVE: import/fresh drop the active DB; new creates/recreates the named DB.",
+        description: "Manage projects and their databases. action: list (projects + active one) | switch (activate odoo-<project>.conf and restart; also changes the running Odoo 18/19) | new (scaffold a new project) | import (load a backup into the active DB) | fresh (reset the active DB to a fresh one initialized with base, + 'modules') | stream (stream a remote nellika.sh/tcff Odoo db+filestore over SSH into the active project). DESTRUCTIVE: import/fresh/stream drop the active DB; new creates/recreates the named DB.",
         inputSchema: {
           type: "object",
           properties: {
-            action: { type: "string", enum: ["list", "switch", "new", "import", "fresh"], description: "What to do" },
+            action: { type: "string", enum: ["list", "switch", "new", "import", "fresh", "stream"], description: "What to do" },
             project: { type: "string", description: "Project name (switch)" },
             name: { type: "string", description: "New project name (new) — used for odoo-<name>.conf, the database, and the ./<name> addons symlink" },
             odooVersion: { type: "string", enum: ["18", "19"], description: "Odoo version for a new project (new)", default: "18" },
@@ -203,9 +203,13 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
             repo: { type: "string", description: "Path to symlink ./<name> at (new; default ~/git/<name>)" },
             httpPort: { type: "number", description: "http_port for a new project (new; default 8069)" },
             backupFile: { type: "string", description: "Backup file path (import): .zip / .sql / .sql.gz / .dump" },
-            dbOnly: { type: "boolean", description: "Restore DB only, skip filestore (import)", default: false },
-            neutralize: { type: "boolean", description: "Neutralize the DB after import (disable mail/crons/payments)", default: false },
-            noStart: { type: "boolean", description: "Do not start Odoo afterwards (new/import/fresh)", default: false }
+            remoteHost: { type: "string", description: "Remote SSH host to stream from (stream), e.g. 'nellika_production_odoo'" },
+            remoteDb: { type: "string", description: "Override the auto-discovered remote db name (stream)" },
+            remoteDataDir: { type: "string", description: "Override the auto-discovered remote data_dir (stream)" },
+            dbOnly: { type: "boolean", description: "Restore DB only, skip filestore (import/stream)", default: false },
+            filestoreOnly: { type: "boolean", description: "Stream the filestore only, skip the database (stream)", default: false },
+            neutralize: { type: "boolean", description: "Neutralize the DB after import/stream (disable mail/crons/payments)", default: false },
+            noStart: { type: "boolean", description: "Do not start Odoo afterwards (new/import/fresh/stream)", default: false }
           },
           required: ["action"]
         }
@@ -271,6 +275,13 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
               dbOnly: args.dbOnly, neutralize: args.neutralize, noStart: args.noStart,
             });
           case "fresh": return odoo.createFreshDb(config, { init: args.modules, noStart: args.noStart });
+          case "stream":
+            need(args.remoteHost, "remoteHost");
+            return odoo.streamDatabase(config, args.remoteHost, {
+              remoteDb: args.remoteDb, remoteDataDir: args.remoteDataDir,
+              dbOnly: args.dbOnly, filestoreOnly: args.filestoreOnly,
+              neutralize: args.neutralize, noStart: args.noStart,
+            });
         }
         break;
       case "odoo_info":

@@ -14,31 +14,35 @@ directly into the LOCAL dev environment at `~/odoo` by **streaming over SSH** �
 `pg_dump | pg_restore` and `tar | tar`, with no intermediate dump files on
 disk. The DB and filestore transfers run **in parallel**.
 
-The single deliverable is the script:
+The skill entry point is a thin wrapper script:
 
 ```
-__STREAM_SH__
+__STREAM_SH__ <remote_ssh_host> [options]
+```
+
+It forwards to the **single shared implementation** — the engine's `stream`
+verb in `manage_odoo.sh` (`stream_remote_odoo`), the same code the `odoo` CLI
+and the MCP server use. So these are equivalent:
+
+```bash
+__STREAM_SH__ nellika_production_odoo --neutralize     # this skill (prompts unless --yes)
+node __ODOO_CLI__ stream nellika_production_odoo --neutralize   # the odoo CLI
+# MCP:  odoo_project  action=stream  remoteHost=nellika_production_odoo  neutralize=true
 ```
 
 ## What it does
 
-1. **Discovers the remote** (read-only): one ssh that sources the remote
-   `~/scripts/odoo.env` to read `odoo_db` and `data_dir`. The remote filestore
-   is `$data_dir/filestore/$odoo_db`. PGUSER/PGPASSWORD for the remote come from
-   that same env file, so `pg_dump` authenticates there.
+1. **Discovers the remote** (read-only): one ssh sources the remote
+   `~/scripts/odoo.env` to read `odoo_db` and `data_dir` (and PGUSER/PGPASSWORD,
+   so `pg_dump` authenticates there). Override with `--remote-db` / `--remote-data-dir`.
 2. **Reads the ACTIVE local project** from `~/odoo/odoo.conf` (`db_name`,
-   `db_user`, `db_host`, `db_port`, `filestore`). Refuses to run if `odoo.conf`
-   is missing. Local filestore target = `<filestore>/<db_name>` resolved against
-   `~/odoo`.
-3. **Stops local Odoo** (via the `odoo` CLI).
-4. **DB stream:** terminate connections, `dropdb --if-exists`, `createdb -O <user>`,
-   create the `unaccent` + `pg_trgm` extensions and
-   `ALTER FUNCTION unaccent(text) IMMUTABLE`, then
-   `ssh <host> '. ~/scripts/odoo.env; pg_dump -Fc --no-owner --no-privileges "$odoo_db"' | pv | pg_restore --no-owner -d <db>`.
-5. **Filestore stream (in parallel):**
-   `ssh <host> '. ~/scripts/odoo.env; tar -C "$data_dir/filestore" -zc "$odoo_db"' | pv | tar -zx`,
-   then rename the extracted `$odoo_db` dir to the local `<db_name>`.
-6. Optionally **neutralize**, then **start** local Odoo.
+   `db_user`, `db_host`, `db_port`, `filestore`).
+3. **Stops local Odoo**, then runs two streams **in parallel**:
+   - **DB:** terminate connections → `dropdb`/`createdb -O <user>` → create
+     `unaccent`+`pg_trgm` (IMMUTABLE) → `ssh … pg_dump -Fc | pv | pg_restore`.
+   - **Filestore:** `ssh … tar -zc | pv | tar -zx`, then rename `$odoo_db` →
+     `<db_name>`.
+4. Optionally **neutralize** (reuses `odoo-bin neutralize`), then **start** Odoo.
 
 ## Prerequisites
 

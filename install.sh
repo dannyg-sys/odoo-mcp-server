@@ -69,8 +69,10 @@ else
   mkdir -p "$STREAM_DEST_DIR"
   sed -e "s|__ODOO_CLI__|$CLI|g" \
       -e "s|__STREAM_SH__|$STREAM_SH|g" \
+      -e "s|__ENGINE__|$ENGINE|g" \
       "$STREAM_SKILL_SRC" > "$STREAM_DEST_DIR/SKILL.md"
   sed -e "s|__ODOO_CLI__|$CLI|g" \
+      -e "s|__ENGINE__|$ENGINE|g" \
       "$STREAM_SH_SRC" > "$STREAM_SH"
   chmod +x "$STREAM_SH"
   echo "Installed skill -> $STREAM_DEST_DIR/SKILL.md"
