@@ -80,7 +80,14 @@ make_venv() {
   echo "Creating venv $venv (from $src/requirements.txt) ..."
   "$PYTHON" -m venv "$venv"
   "$venv/bin/python3" -m pip install --upgrade pip wheel
-  [ -f "$src/requirements.txt" ] && "$venv/bin/python3" -m pip install -r "$src/requirements.txt"
+  if [ -f "$src/requirements.txt" ]; then
+    # Odoo pins source psycopg2, which needs pg_config + a C toolchain to build.
+    # Install from a filtered copy (kept in the venv) that uses the prebuilt
+    # psycopg2-binary wheel instead — the Odoo checkout stays untouched.
+    local req="$venv/requirements.txt"
+    sed -E 's/^psycopg2([^-[:alnum:]]|$)/psycopg2-binary\1/' "$src/requirements.txt" > "$req"
+    "$venv/bin/python3" -m pip install -r "$req"
+  fi
 }
 
 say "Building virtualenvs"
