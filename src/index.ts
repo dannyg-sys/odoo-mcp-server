@@ -36,28 +36,51 @@ class OdooMCPServer {
       console.error("[MCP Error]", error);
     };
 
-    // Handle uncaught errors
+    // Handle uncaught errors. A broken stdio pipe means the client is gone:
+    // exit instead of retrying forever (orphaned servers pinned a core for days).
+    const isPipeGone = (e: any) =>
+      e && (e.code === "EPIPE" || e.code === "ERR_STREAM_DESTROYED" || e.code === "ECONNRESET");
+
     process.on("uncaughtException", (error) => {
+      if (isPipeGone(error)) {
+        this.exit("stdio pipe closed", 0);
+        return;
+      }
       console.error("[Uncaught Exception]", error);
       // Don't exit - keep server running
     });
 
     process.on("unhandledRejection", (reason, promise) => {
+      if (isPipeGone(reason)) {
+        this.exit("stdio pipe closed", 0);
+        return;
+      }
       console.error("[Unhandled Rejection]", reason);
       // Don't exit - keep server running
     });
 
-    process.on("SIGINT", async () => {
-      console.error("[Shutting down]");
-      await this.server.close();
-      process.exit(0);
-    });
+    process.on("SIGINT", () => this.exit("SIGINT", 0));
+    process.on("SIGTERM", () => this.exit("SIGTERM", 0));
+    process.on("SIGHUP", () => this.exit("SIGHUP", 0));
+  }
 
-    process.on("SIGTERM", async () => {
-      console.error("[Shutting down]");
-      await this.server.close();
-      process.exit(0);
-    });
+  private exiting = false;
+
+  // Close the MCP server and exit. Never lets a hung close() keep the
+  // process alive: hard exit after 2s regardless.
+  private exit(reason: string, code: number) {
+    if (this.exiting) return;
+    this.exiting = true;
+    try {
+      console.error(`[Shutting down] ${reason}`);
+    } catch {
+      /* stderr may be gone too */
+    }
+    const t = setTimeout(() => process.exit(code), 2000);
+    t.unref();
+    Promise.resolve(this.server.close())
+      .catch(() => {})
+      .finally(() => process.exit(code));
   }
 
   private setupHandlers() {
@@ -304,6 +327,14 @@ Use any of these commands naturally and I'll use the Odoo management tools to he
     try {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
+
+      // Client gone (stdin EOF / stdout broken) => exit, don't linger as an orphan.
+      process.stdin.on("end", () => this.exit("stdin closed", 0));
+      process.stdin.on("close", () => this.exit("stdin closed", 0));
+      process.stdin.on("error", () => this.exit("stdin error", 0));
+      process.stdout.on("error", () => this.exit("stdout error", 0));
+      process.stdout.on("close", () => this.exit("stdout closed", 0));
+
       console.error("Odoo MCP Server running on stdio");
     } catch (error) {
       console.error("Failed to start MCP server:", error);
