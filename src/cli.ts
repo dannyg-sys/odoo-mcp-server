@@ -12,6 +12,7 @@ interface ParsedArgs {
   command: string;
   positionals: string[];
   errorOnly: boolean;
+  withoutDemo: boolean;
   tags?: string;
   lines?: number;
   base?: string;
@@ -33,6 +34,7 @@ interface ParsedArgs {
 function parseArgs(argv: string[]): ParsedArgs {
   const positionals: string[] = [];
   let errorOnly = false;
+  let withoutDemo = false;
   let tags: string | undefined;
   let lines: number | undefined;
   let base: string | undefined;
@@ -54,6 +56,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     const arg = argv[i];
     if (arg === "--error-only") {
       errorOnly = true;
+    } else if (arg === "--without-demo") {
+      withoutDemo = true;
     } else if (arg === "--tags") {
       tags = argv[++i];
     } else if (arg === "--lines") {
@@ -94,7 +98,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   const command = positionals.shift() || "help";
-  return { command, positionals, errorOnly, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart, remoteDb, remoteDataDir, init, odooVersion, enterprise, modules, repo, httpPort, force };
+  return { command, positionals, errorOnly, withoutDemo, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart, remoteDb, remoteDataDir, init, odooVersion, enterprise, modules, repo, httpPort, force };
 }
 
 const HELP = `Odoo management CLI
@@ -126,6 +130,7 @@ Commands:
 
 Options:
   --error-only               Suppress warnings, show only errors (update/install/frontend/test)
+  --without-demo             Skip demo data for newly installed modules (update/install/frontend)
   --tags <tags>              Test tags filter (test command)
   --lines <n>                Number of log lines (logs command, default 50)
   --base <path|name>         Base directory (default: $HOME/odoo, fallback ~/git/odoo18)
@@ -145,7 +150,7 @@ Options:
 `;
 
 function run(): odoo.OdooResult {
-  const { command, positionals, errorOnly, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart,
+  const { command, positionals, errorOnly, withoutDemo, tags, lines, base, dbOnly, filestoreOnly, neutralize, noStart,
           remoteDb, remoteDataDir, init,
           odooVersion, enterprise, modules, repo, httpPort, force } =
     parseArgs(process.argv.slice(2));
@@ -167,10 +172,10 @@ function run(): odoo.OdooResult {
       return odoo.checkStatus(config);
     case "update":
       if (!positionals[0]) throw new Error("update requires a module list");
-      return odoo.updateModules(config, positionals[0], errorOnly);
+      return odoo.updateModules(config, positionals[0], errorOnly, withoutDemo);
     case "install":
       if (!positionals[0]) throw new Error("install requires a module list");
-      return odoo.installModules(config, positionals[0], errorOnly);
+      return odoo.installModules(config, positionals[0], errorOnly, withoutDemo);
     case "frontend":
       if (!positionals[0]) throw new Error("frontend requires a module list");
       return odoo.updateFrontend(config, positionals[0], errorOnly);

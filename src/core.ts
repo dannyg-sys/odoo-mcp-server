@@ -251,10 +251,12 @@ export function checkStatus(config: OdooConfig): OdooResult {
 export function updateModules(
   config: OdooConfig,
   modules: string,
-  errorOnly: boolean
+  errorOnly: boolean,
+  withoutDemo?: boolean
 ): OdooResult {
   const errorFlag = errorOnly ? " --error-only" : "";
-  const output = executeCommand(config, manage(`update ${modules}${errorFlag}`));
+  const demoFlag = withoutDemo ? " --without-demo" : "";
+  const output = executeCommand(config, manage(`update ${modules}${errorFlag}${demoFlag}`));
   const filteredOutput = filterOdooOutput(output, errorOnly);
   return { text: `Modules updated: ${modules}\n${filteredOutput}` };
 }
@@ -262,10 +264,12 @@ export function updateModules(
 export function installModules(
   config: OdooConfig,
   modules: string,
-  errorOnly: boolean
+  errorOnly: boolean,
+  withoutDemo?: boolean
 ): OdooResult {
   const errorFlag = errorOnly ? " --error-only" : "";
-  const output = executeCommand(config, manage(`install ${modules}${errorFlag}`));
+  const demoFlag = withoutDemo ? " --without-demo" : "";
+  const output = executeCommand(config, manage(`install ${modules}${errorFlag}${demoFlag}`));
   const filteredOutput = filterOdooOutput(output, errorOnly);
   return { text: `Modules installed: ${modules}\n${filteredOutput}` };
 }

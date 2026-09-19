@@ -62,18 +62,28 @@ start_odoo() {
 
 # Function to upgrade modules (updates module and restarts Odoo)
 upgrade_modules() {
-    local modules="$1"
-    local error_only="$2"
+    local modules="$1"; shift
+    local error_only=0 without_demo=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --error-only)   error_only=1 ;;
+            --without-demo) without_demo=1 ;;
+        esac
+        shift
+    done
     local ODOO_SRC=$(get_odoo_src)
     local PYTHON_VENV=$(get_python_venv)
 
     echo "Upgrading modules: $modules (includes restart)"
 
+    local -a extra_args=()
+    [ "$without_demo" = 1 ] && extra_args+=(--without-demo=all)
+
     # Update the modules first
-    if [ "$error_only" = "--error-only" ]; then
-        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -u "$modules" --no-http --stop-after-init --log-level=error
+    if [ "$error_only" = 1 ]; then
+        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -u "$modules" --no-http --stop-after-init --log-level=error "${extra_args[@]}"
     else
-        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -u "$modules" --no-http --stop-after-init --log-level=warn
+        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -u "$modules" --no-http --stop-after-init --log-level=warn "${extra_args[@]}"
     fi
 
     # Then restart Odoo to reload frontend assets (quietly)
@@ -98,17 +108,27 @@ upgrade_modules() {
 
 # Function to install modules
 install_modules() {
-    local modules="$1"
-    local error_only="$2"
+    local modules="$1"; shift
+    local error_only=0 without_demo=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --error-only)   error_only=1 ;;
+            --without-demo) without_demo=1 ;;
+        esac
+        shift
+    done
     local ODOO_SRC=$(get_odoo_src)
     local PYTHON_VENV=$(get_python_venv)
 
     echo "Installing modules: $modules"
 
-    if [ "$error_only" = "--error-only" ]; then
-        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -i "$modules" --no-http --stop-after-init --log-level=error
+    local -a extra_args=()
+    [ "$without_demo" = 1 ] && extra_args+=(--without-demo=all)
+
+    if [ "$error_only" = 1 ]; then
+        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -i "$modules" --no-http --stop-after-init --log-level=error "${extra_args[@]}"
     else
-        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -i "$modules" --no-http --stop-after-init --log-level=warn
+        ${PYTHON_VENV}/bin/python3 ${ODOO_SRC}/odoo-bin -c odoo.conf -i "$modules" --no-http --stop-after-init --log-level=warn "${extra_args[@]}"
     fi
 }
 
@@ -791,18 +811,20 @@ case "$1" in
     "upgrade"|"update"|"frontend")
         if [ -z "$2" ]; then
             echo "Error: No modules specified for upgrade"
-            echo "Usage: $0 upgrade MODULE[,...] [--error-only]"
+            echo "Usage: $0 upgrade MODULE[,...] [--error-only] [--without-demo]"
             exit 1
         fi
-        upgrade_modules "$2" "$3"
+        shift
+        upgrade_modules "$@"
         ;;
     "install")
         if [ -z "$2" ]; then
             echo "Error: No modules specified for installation"
-            echo "Usage: $0 install MODULE[,...] [--error-only]"
+            echo "Usage: $0 install MODULE[,...] [--error-only] [--without-demo]"
             exit 1
         fi
-        install_modules "$2" "$3"
+        shift
+        install_modules "$@"
         ;;
     "test")
         # $2 = modules (optional), $3 = test tags (optional), $4 = --error-only flag (optional)
