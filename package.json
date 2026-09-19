@@ -5,10 +5,11 @@
   "type": "module",
   "bin": {
     "odoo-mcp-server": "./build/index.js",
-    "odoo-cli": "./build/cli.js"
+    "odoo-cli": "./build/cli.js",
+    "railway-odoo-cli": "./build/railway-cli.js"
   },
   "scripts": {
-    "build": "tsc && chmod +x build/index.js build/cli.js",
+    "build": "tsc && chmod +x build/index.js build/cli.js build/railway-cli.js",
     "watch": "tsc --watch",
     "prepare": "npm run build",
     "setup": "bash install.sh",
